@@ -1,6 +1,10 @@
-import express from "express"; 
+import express from "express";
 import Thread from "../models/Thread.js";
+import Upload from "../models/Upload.js";
 import getOpenAIResponse from "../utils/openai.js";
+import { authenticate, optionalAuthenticate } from "../middleware/auth.js";
+import { apiRateLimiter } from "../middleware/rateLimiter.js";
+import { encodeImageToBase64 } from "../utils/fileProcessor.js";
 
 const router = express.Router();
 
@@ -17,23 +21,34 @@ router.post("/test", async (req, res) => {
         res.status(500).send({error: "Failed to save in Db"});
     }
 });
-// get all threads
-router.get("/thread", async (req, res) => {
+// get all threads (with optional authentication)
+router.get("/thread", optionalAuthenticate, async (req, res) => {
     try {
-        const threads = await Thread.find({}).sort({updatedAt: -1});
+        // If user is authenticated, return only their threads
+        // Otherwise, return threads without userId (backward compatibility)
+        const query = req.user ? { userId: req.user.id } : { userId: { $exists: false } };
+        const threads = await Thread.find(query).sort({updatedAt: -1});
         res.json(threads);
     } catch (error) {
         console.log(error);
         res.status(500).send({error: "Failed to retrieve threads"});
     }
 });
-// get a thread by id
-router.get("/thread/:threadId", async (req, res) => {
+// get a thread by id (with optional authentication)
+router.get("/thread/:threadId", optionalAuthenticate, async (req, res) => {
     const {threadId} = req.params;
     try{
-        const thread = await Thread.findOne({threadId: threadId});
+        // Build query based on authentication
+        const query = { threadId: threadId };
+        if (req.user) {
+            query.userId = req.user.id;
+        } else {
+            query.userId = { $exists: false };
+        }
+
+        const thread = await Thread.findOne(query);
         if(!thread){
-            res.status(404).send("Thread not found");
+            return res.status(404).send("Thread not found");
         }
         res.json(thread.messages);
     } catch (error) {
@@ -42,13 +57,21 @@ router.get("/thread/:threadId", async (req, res) => {
     }
 });
 
-// delete a thread
-router.delete("/thread/:threadId", async (req, res) => {
+// delete a thread (with optional authentication)
+router.delete("/thread/:threadId", optionalAuthenticate, async (req, res) => {
     const {threadId} = req.params;
     try{
-        const deletedThread = await Thread.findOneAndDelete({threadId: threadId});
+        // Build query based on authentication
+        const query = { threadId: threadId };
+        if (req.user) {
+            query.userId = req.user.id;
+        } else {
+            query.userId = { $exists: false };
+        }
+
+        const deletedThread = await Thread.findOneAndDelete(query);
         if(!deletedThread){
-            res.status(404).json({"error": "Thread not found"});
+            return res.status(404).json({"error": "Thread not found"});
         }
         res.status(200).json({"message": "Thread deleted successfully"});
     } catch (error) {
@@ -56,25 +79,67 @@ router.delete("/thread/:threadId", async (req, res) => {
         res.status(500).send("Failed to delete thread");
     }
 });
-// chat route
-router.post("/chat", async (req, res) => {
-    const {threadId, message} = req.body;
+// chat route (with optional authentication and rate limiting)
+router.post("/chat", apiRateLimiter, optionalAuthenticate, async (req, res) => {
+    const {threadId, message, fileIds} = req.body;
     if(!threadId || !message){
-        res.status(400).json({"error": "Thread ID and message are required"});
+        return res.status(400).json({"error": "Thread ID and message are required"});
     }
     try{
-        let thread = await Thread.findOne({threadId: threadId});
+        const query = { threadId: threadId };
+        if (req.user) {
+            query.userId = req.user.id;
+        } else {
+            query.userId = { $exists: false };
+        }
+
+        let thread = await Thread.findOne(query);
         if(!thread){
             thread = new Thread({
                 threadId,
-                title: message,
+                userId: req.user ? req.user.id : undefined,
+                title: message.substring(0, 100),
                 messages: [{role:"user",content:message}]
             });
         } else {
             thread.messages.push({role:"user",content:message});
         }
-        const assistReply = await getOpenAIResponse(message);
-        thread.messages.push({role:"assistant",content:assistReply}); 
+
+        // Build context with file content
+        let contextMessage = message;
+        let images = [];
+        
+        if (fileIds && fileIds.length > 0) {
+            const uploads = await Upload.find({ _id: { $in: fileIds } });
+            let fileContext = "\n\n--- Attached Files ---\n";
+            
+            for (const upload of uploads) {
+                if (upload.mimeType.startsWith('image/')) {
+                    // Encode image for GPT-4 Vision
+                    try {
+                        const base64 = await encodeImageToBase64(upload.storageUrl);
+                        images.push({ base64, mimeType: upload.mimeType });
+                        fileContext += `\nImage: ${upload.originalName}\n`;
+                    } catch (err) {
+                        console.error('Error encoding image:', err);
+                    }
+                } else {
+                    fileContext += `\nFile: ${upload.originalName}\n`;
+                    if (upload.extractedText) {
+                        const textLength = upload.extractedText.length;
+                        const maxLength = 15000;
+                        fileContext += `Content (${textLength} chars): ${upload.extractedText.substring(0, maxLength)}${textLength > maxLength ? '... [truncated]' : ''}\n`;
+                        console.log(`Including ${Math.min(textLength, maxLength)} chars from ${upload.originalName}`);
+                    } else {
+                        console.warn(`No extracted text for ${upload.originalName}`);
+                    }
+                }
+            }
+            contextMessage = message + fileContext;
+        }
+
+        const assistReply = await getOpenAIResponse(contextMessage, images);
+        thread.messages.push({role:"assistant",content:assistReply});
         thread.updatedAt = Date.now();
         await thread.save();
         res.json({reply: assistReply,threadId});

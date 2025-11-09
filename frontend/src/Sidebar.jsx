@@ -2,13 +2,18 @@ import "./Sidebar.css";
 import { useContext, useEffect } from "react";
 import { MyContext } from "./MyContext.jsx";
 import {v1 as uuidv1} from "uuid";
+import UserProfile from "./UserProfile.jsx";
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 function Sidebar() {
     const {allThreads, setAllThreads, currThreadId, setNewChat, setPrompt, setReply, setCurrThreadId, setPrevChats} = useContext(MyContext);
 
     const getAllThreads = async () => {
         try {
-            const response = await fetch("http://localhost:8080/api/thread");
+            const response = await fetch(`${API_URL}/api/thread`, {
+                credentials: 'include'
+            });
             const res = await response.json();
             const filteredData = res.map(thread => ({threadId: thread.threadId, title: thread.title}));
             //console.log(filteredData);
@@ -35,7 +40,9 @@ function Sidebar() {
         setCurrThreadId(newThreadId);
 
         try {
-            const response = await fetch(`http://localhost:8080/api/thread/${newThreadId}`);
+            const response = await fetch(`${API_URL}/api/thread/${newThreadId}`, {
+                credentials: 'include'
+            });
             const res = await response.json();
             console.log(res);
             setPrevChats(res);
@@ -44,11 +51,14 @@ function Sidebar() {
         } catch(err) {
             console.log(err);
         }
-    }   
+    }
 
     const deleteThread = async (threadId) => {
         try {
-            const response = await fetch(`http://localhost:8080/api/thread/${threadId}`, {method: "DELETE"});
+            const response = await fetch(`${API_URL}/api/thread/${threadId}`, {
+                method: "DELETE",
+                credentials: 'include'
+            });
             const res = await response.json();
             console.log(res);
 
@@ -67,7 +77,8 @@ function Sidebar() {
     return (
         <section className="sidebar">
             <button onClick={createNewChat}>
-                <img src="src/assets/blacklogo.png" alt="gpt logo" className="logo"></img>
+                <img src="src/assets/plx_logo.png" alt="gpt logo" className="logo"></img>
+                <span>New Chat</span>
                 <span><i className="fa-solid fa-pen-to-square"></i></span>
             </button>
 
@@ -75,8 +86,8 @@ function Sidebar() {
             <ul className="history">
                 {
                     allThreads?.map((thread, idx) => (
-                        <li key={idx} 
-                            onClick={(e) => changeThread(thread.threadId)}
+                        <li key={idx}
+                            onClick={() => changeThread(thread.threadId)}
                             className={thread.threadId === currThreadId ? "highlighted": " "}
                         >
                             {thread.title}
@@ -90,10 +101,8 @@ function Sidebar() {
                     ))
                 }
             </ul>
- 
-            <div className="sign">
-                <p></p>
-            </div>
+
+            <UserProfile />
         </section>
     )
 }

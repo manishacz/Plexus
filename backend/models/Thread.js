@@ -21,6 +21,12 @@ const ThreadSchema = new mongoose.Schema({
         required: true,
         unique: true,
     },
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: false, // Optional to maintain backward compatibility
+        index: true
+    },
     title: {
         type: String,
         default: "New Thread"
@@ -36,5 +42,8 @@ const ThreadSchema = new mongoose.Schema({
     }
 
 });
+
+// Compound index for efficient user-specific thread queries
+ThreadSchema.index({ userId: 1, updatedAt: -1 });
 
 export default mongoose.model("Thread", ThreadSchema);

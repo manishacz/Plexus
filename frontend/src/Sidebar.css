@@ -1,87 +1,132 @@
 .sidebar {
     background-color: #171717;
-    color: #b4b4b4;
+    color: #ececec;
     height: 100vh;
-    width: 320px;
+    width: 380px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    overflow: hidden;
 }
 
-
-button {
+.sidebar button {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin: 10px;
-    padding: 10px;
-    border-radius: 5px;
+    margin: 12px;
+    padding: 12px 16px;
+    border-radius: 8px;
     background-color: transparent;
-    border: solid 0.5px rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     cursor: pointer;
+    transition: all 0.2s ease;
+    color: #ececec;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.sidebar button:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
 .logo {
-    height: 25px;
-    width: 25px;
+    height: 20px;
+    width: 20px;
     background-color: #fff;
     border-radius: 50%;
     object-fit: cover;
 }
 
-button span {
-    font-size: 20px;
-}
-
-button:hover {
-    background-color: rgba(180, 180, 180, 0.05);
+.sidebar button span {
+    font-size: 18px;
+    color: #ececec;
 }
 
 .history {
-    margin: 10px;
-    padding: 10px;
+    margin: 0;
+    padding: 8px;
     height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.history::-webkit-scrollbar {
+    width: 6px;
+}
+
+.history::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.history::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.history::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
 
 .history li {
     list-style-type: none;
     cursor: pointer;
-    padding: 2px 5px;
-    margin-bottom: 0.3rem;
+    padding: 10px 12px;
+    margin-bottom: 4px;
     font-size: 14px;
-    border: solid 10px transparent;
+    border-radius: 8px;
     position: relative;
+    transition: all 0.2s ease;
+    color: #ececec;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    overflow: hidden; /* clip long titles but allow the title to shrink */
 }
 
 .history li:hover {
-    background-color: rgba(180, 180, 180, 0.05);
-    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.08);
 }
 
-.sign {
-    padding: 10px;
-    margin: 10px;
-    font-size: 14px;
-    text-align: center;
-    border-top: solid 0.25px rgba(255, 255, 255, 0.5);
+.history li > *:first-child {
+    /* ensure the first child (title) can shrink and show ellipsis */
+    flex: 1 1 auto;
+    min-width: 0; /* required so flex item can shrink below its content size */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .fa-trash {
     opacity: 0;
-    position: absolute;
-    right: 0;
+    transition: opacity 0.15s ease, color 0.15s ease;
+    font-size: 14px;
+    padding: 4px;
+    border-radius: 4px;
+    flex: 0 0 auto;
+    margin-left: 8px;
+    cursor: pointer;
 }
 
 .history li:hover .fa-trash {
     opacity: 1;
-    color: #fff;
+    color: #b4b4b4;
 }
 
 .fa-trash:hover {
     color: #f87171 !important;
+    background-color: rgba(248, 113, 113, 0.1);
 }
 
 .highlighted {
-    background-color: rgba(180, 180, 180, 0.05);
-    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 260px;
+    }
 }

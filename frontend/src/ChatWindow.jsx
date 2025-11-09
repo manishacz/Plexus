@@ -1,40 +1,61 @@
 import "./ChatWindow.css";
 import Chat from "./Chat.jsx";
+import FileUpload from "./FileUpload.jsx";
 import { MyContext } from "./MyContext.jsx";
 import { useContext, useState, useEffect } from "react";
-import {ScaleLoader} from "react-spinners";
+import {SyncLoader} from "react-spinners";
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 function ChatWindow() {
     const {prompt, setPrompt, reply, setReply, currThreadId, setPrevChats, setNewChat} = useContext(MyContext);
     const [loading, setLoading] = useState(false);
-    const [isOpen, setIsOpen] = useState(false);
+    const [showFileUpload, setShowFileUpload] = useState(false);
+    const [uploadedFiles, setUploadedFiles] = useState([]);
 
     const getReply = async () => {
+        if (!prompt.trim()) return;
+
         setLoading(true);
         setNewChat(false);
 
-        console.log("message ", prompt, " threadId ", currThreadId);
+        let messageContent = prompt;
+        
+        // Add file context if files are uploaded
+        if (uploadedFiles.length > 0) {
+            const fileContext = uploadedFiles.map(f => `[File: ${f.originalName}]`).join(' ');
+            messageContent = `${fileContext}\n\n${prompt}`;
+        }
+
         const options = {
             method: "POST",
+            credentials: 'include',
             headers: {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                message: prompt,
-                threadId: currThreadId
+                message: messageContent,
+                threadId: currThreadId,
+                fileIds: uploadedFiles.map(f => f.id)
             })
         };
 
         try {
-            const response = await fetch("http://localhost:8080/api/chat", options);
+            const response = await fetch(`${API_URL}/api/chat`, options);
             const res = await response.json();
-            console.log(res);
             setReply(res.reply);
+            setUploadedFiles([]);
         } catch(err) {
             console.log(err);
+            setReply("Sorry, I encountered an error. Please try again.");
         }
         setLoading(false);
     }
+
+    const handleUploadComplete = (files) => {
+        setUploadedFiles(files);
+        setShowFileUpload(false);
+    };
 
     //Append new chat to prevChats
     useEffect(() => {
@@ -53,45 +74,82 @@ function ChatWindow() {
         setPrompt("");
     }, [reply]);
 
-
-    const handleProfileClick = () => {
-        setIsOpen(!isOpen);
-    }
-
     return (
         <div className="chatWindow">
             <div className="navbar">
-                <span>Plexus <i className="fa-solid fa-chevron-down"></i></span>
-                <div className="userIconDiv" onClick={handleProfileClick}>
-                    <span className="userIcon"><i class="fa-solid fa-user"></i></span>
-                </div>
+                <span>Plexus</span>
             </div>
-            {
-                isOpen && 
-                <div className="dropDown">
-                    <div className="dropDownItem"><i class="fa-solid fa-gear"></i> Settings</div>
-                    <div className="dropDownItem"><i class="fa-solid fa-cloud-arrow-up"></i> Upgrade plan</div>
-                    <div className="dropDownItem"><i class="fa-solid fa-arrow-right-from-bracket"></i> Log out</div>
-                </div>
-            }
+
             <Chat></Chat>
 
-            <ScaleLoader color="#fff" loading={loading}>
-            </ScaleLoader>
-            
+            {loading && (
+                <div className="loading-container">
+                    <SyncLoader color="#fff" loading={loading} size={8} />
+                </div>
+            )}
+
             <div className="chatInput">
+                {showFileUpload && (
+                    <div className="file-upload-modal">
+                        <FileUpload onUploadComplete={handleUploadComplete} />
+                        <button 
+                            className="close-upload"
+                            onClick={() => setShowFileUpload(false)}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                )}
+
+                {uploadedFiles.length > 0 && (
+                    <div className="uploaded-files-preview">
+                        {uploadedFiles.map((file, idx) => (
+                            <div key={idx} className="file-badge">
+                                <i className="fa-solid fa-paperclip"></i>
+                                {file.originalName}
+                                <button onClick={() => setUploadedFiles(prev => prev.filter((_, i) => i !== idx))}>
+                                    <i className="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 <div className="inputBox">
-                    <input placeholder="Ask anything"
+                    <button
+                        className="attach-button"
+                        onClick={() => setShowFileUpload(!showFileUpload)}
+                        disabled={loading}
+                        title="Attach files"
+                    >
+                        <i className="fa-solid fa-paperclip"></i>
+                    </button>
+                    <input
+                        placeholder="Message Plexus..."
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter'? getReply() : ''}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                getReply();
+                            }
+                        }}
+                        disabled={loading}
+                    />
+                    <button
+                        id="submit"
+                        onClick={getReply}
+                        disabled={loading || !prompt.trim()}
+                        style={{
+                            opacity: loading || !prompt.trim() ? 0.5 : 1,
+                            cursor: loading || !prompt.trim() ? 'not-allowed' : 'pointer'
+                        }}
                     >
-                           
-                    </input>
-                    <div id="submit" onClick={getReply}><i  style={{ color: "#212121" }} class="fa-solid fa-arrow-up"></i></div>
+                        <i className="fa-solid fa-arrow-up"></i>
+                    </button>
                 </div>
                 <p className="info">
-                    Plexus can make mistakes. Check important info. See Cookie Preferences.
+                    Plexus can make mistakes. Check important info.
                 </p>
             </div>
         </div>

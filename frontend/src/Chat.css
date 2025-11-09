@@ -1,34 +1,159 @@
 .chats {
+    /* keep chat column a bit narrower and enable scrolling */
     max-width: 700px;
+    width: 100%;
     overflow-y: scroll;
-    padding: 8rem;
+    padding: 8rem 20px 40px 20px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+
+    /* hide scrollbar visually but keep scrolling enabled */
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+}
+
+
+.chats::-webkit-scrollbar {
+    /* hide webkit scrollbar but preserve scroll behavior */
+    width: 0;
+    height: 0;
+    background: transparent;
+}
+
+.chats::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chats::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 4px;
+}
+
+.chats::-webkit-scrollbar-thumb:hover {
+    background: transparent;
+}
+
+.chats h1 {
+    text-align: center;
+    color: #ececec;
+    font-size: 32px;
+    font-weight: 600;
+    margin: 60px 0;
 }
 
 .userDiv {
     display: flex;
     justify-content: flex-end;
-    font-size: 0.9rem;
+    width: 100%;
 }
-
 
 .gptDiv {
     text-align: left;
-    font-size: 0.9rem;
+    /* display: flex; */
+    /* justify-content: flex-start; */
+    width: 100%;
 }
 
 .userMessage {
-    background-color: #323232;
-    padding: 10px 20px;
-    border-radius: 14px;
-    margin-left: 15rem;
-    max-width: 500px;
+    background-color: #2f2f2f;
+    padding: 12px 18px;
+    border-radius: 18px;
+    max-width: 70%;
     width: fit-content;
+    color: #ececec;
+    font-size: 15px;
+    line-height: 1.6;
+    word-wrap: break-word;
 }
 
+/* .gptDiv > div {
+    background-color: transparent;
+    padding: 12px 18px;
+    border-radius: 18px;
+    max-width: 85%;
+    width: fit-content;
+    color: #ececec;
+    font-size: 15px;
+    line-height: 1.7;
+}
+
+
+
+
+
+.gptDiv li {
+    max-width: 700px;
+    width: 100%;
+    overflow-y: scroll;
+    padding: 8rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    font-size: 14px;
+    /* keep scrollbars hidden for nested blocks too */
+    /* -ms-overflow-style: none; /* IE and Edge */
+    
+
+.gptDiv pre {
+    /* hide webkit scrollbar but preserve scroll behavior */
+    /* width: 0;
+    height: 0; */
+    background: transparent;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 12px 0;
+} 
+
+.gptDiv pre code {
+    background: transparent;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1.5;
+}  
+.gptDiv p {
+    margin: 8px 0;
+}
+.gptDiv ul,
+.gptDiv ol {
+    margin: 8px 0;
+    padding-left: 24px;
+}
 .hljs {
-    border-radius: 14px !important;
+    border-radius: 8px !important;
+    background-color: #1a1a1a !important;
 }
 
 pre {
     white-space: pre-wrap;
+    word-wrap: break-word;
 }
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .chats {
+        padding: 20px 16px;
+        gap: 20px;
+    }
+
+    .chats h1 {
+        font-size: 24px;
+        margin: 40px 0;
+    }
+
+    .userMessage {
+        max-width: 85%;
+        font-size: 14px;
+        padding: 10px 14px;
+    }
+
+    .gptDiv > div {
+        max-width: 95%;
+        font-size: 14px;
+        padding: 10px 14px;
+    }
+}
+        

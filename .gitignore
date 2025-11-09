@@ -31,4 +31,6 @@ Thumbs.db
 coverage/
 
 # Optional: allow keeping .env.example
-!.env.example
+
+.amazonq/
+backend/.env.example
