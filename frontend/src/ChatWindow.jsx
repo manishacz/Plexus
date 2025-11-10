@@ -5,7 +5,7 @@ import { MyContext } from "./MyContext.jsx";
 import { useContext, useState, useEffect } from "react";
 import {SyncLoader} from "react-spinners";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_URL = import.meta.env.VITE_API_URL || 'https://backend-plexus-cicd.onrender.com';
 
 function ChatWindow() {
     const {prompt, setPrompt, reply, setReply, currThreadId, setPrevChats, setNewChat} = useContext(MyContext);

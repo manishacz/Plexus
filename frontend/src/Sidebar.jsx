@@ -4,7 +4,7 @@ import { MyContext } from "./MyContext.jsx";
 import {v1 as uuidv1} from "uuid";
 import UserProfile from "./UserProfile.jsx";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_URL = import.meta.env.VITE_API_URL || 'https://backend-plexus-cicd.onrender.com';
 
 function Sidebar() {
     const {allThreads, setAllThreads, currThreadId, setNewChat, setPrompt, setReply, setCurrThreadId, setPrevChats} = useContext(MyContext);
