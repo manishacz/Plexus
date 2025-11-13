@@ -5,7 +5,7 @@ import validator from 'validator';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'http://localhost:8080/api/auth/google/callback';
+const CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'https://backend-plexus-cicd.onrender.com/api/auth/google/callback';
 
 // Validate environment variables
 if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
