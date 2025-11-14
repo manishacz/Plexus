@@ -45,12 +45,12 @@ router.get(
                 if (err) {
                     console.error('OAuth callback error:', err);
                     const errorMessage = encodeURIComponent(err.message || 'Authentication failed');
-                    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=${errorMessage}`);
+                    return res.redirect(`${process.env.FRONTEND_URL || 'https://plexus-bay.vercel.app'}/login?error=${errorMessage}`);
                 }
 
                 if (!user) {
                     console.error('No user returned from OAuth');
-                    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=authentication_failed`);
+                    return res.redirect(`${process.env.FRONTEND_URL || 'https://plexus-bay.vercel.app'}/login?error=authentication_failed`);
                 }
 
                 // Generate JWT token
@@ -75,10 +75,10 @@ router.get(
                 console.log(`User authenticated successfully: ${user.email}`);
 
                 // Redirect to frontend with success
-                res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?auth=success`);
+                res.redirect(`${process.env.FRONTEND_URL || 'https://plexus-bay.vercel.app'}?auth=success`);
             } catch (error) {
                 console.error('Error in OAuth callback:', error);
-                res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=server_error`);
+                res.redirect(`${process.env.FRONTEND_URL || 'https://plexus-bay.vercel.app'}/login?error=server_error`);
             }
         })(req, res, next);
     }
