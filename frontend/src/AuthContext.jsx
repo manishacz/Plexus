@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }) => {
                 window.history.replaceState({}, '', window.location.pathname);
                 if (ok) {
                     // navigate to home after successful login
-                    window.location.href = '/';
+                    window.location.href = '/chat';
                 }
             } else {
                 await checkAuthStatus();
