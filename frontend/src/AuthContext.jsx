@@ -10,8 +10,28 @@ export const AuthProvider = ({ children }) => {
     const [error, setError] = useState(null);
 
     // Check if user is authenticated on mount
+    // useEffect(() => {
+    //     checkAuthStatus();
+    // }, []);
+    // Check if user is authenticated on mount and handle OAuth redirect query
     useEffect(() => {
-        checkAuthStatus();
+        (async () => {
+            const params = new URLSearchParams(window.location.search);
+            const authParam = params.get('auth');
+
+            if (authParam === 'success') {
+                // OAuth redirect returned with ?auth=success
+                const ok = await checkAuthStatus();
+                // remove query param without reloading
+                window.history.replaceState({}, '', window.location.pathname);
+                if (ok) {
+                    // navigate to home after successful login
+                    window.location.href = '/';
+                }
+            } else {
+                await checkAuthStatus();
+            }
+        })();
     }, []);
 
     const checkAuthStatus = async () => {
@@ -27,12 +47,15 @@ export const AuthProvider = ({ children }) => {
             if (response.ok) {
                 const data = await response.json();
                 setUser(data.user);
+                return true;
             } else {
                 setUser(null);
+                return false;
             }
         } catch (err) {
             console.error('Auth check failed:', err);
             setUser(null);
+            return false;
         } finally {
             setLoading(false);
         }

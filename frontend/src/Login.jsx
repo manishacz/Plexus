@@ -3,7 +3,7 @@ import { useAuth } from './AuthContext';
 import './Login.css';
 
 const Login = () => {
-    const { login, isAuthenticated } = useAuth();
+    const { login, isAuthenticated , checkAuthStatus } = useAuth();
     const [error, setError] = useState(null);
 
     useEffect(() => {
@@ -27,10 +27,20 @@ const Login = () => {
         // Check for success in URL params
         const authParam = urlParams.get('auth');
         if (authParam === 'success' && isAuthenticated) {
-            // Redirect to main app
-            window.history.replaceState({}, document.title, '/');
+            (async () => {
+                const ok = await checkAuthStatus();
+                // remove the ?auth=success from URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                if (ok) {
+                    // perform a full navigation so protected routes / global state update correctly
+                    window.location.href = '/';
+                } else {
+                    // optional: show an error if session didn't establish
+                    setError('Login succeeded but session could not be established. Please try again.');
+                }
+            })();
         }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, checkAuthStatus]);
 
     const handleGoogleLogin = () => {
         setError(null);
