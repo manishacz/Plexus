@@ -20,9 +20,9 @@ const port = 8080;
 
 // CORS configuration
 const corsOptions = {
-    origin: process.env.FRONTEND_URL || 'https://plexus-bay.vercel.app',
-    credentials: true,
-    optionsSuccessStatus: 200
+  origin: process.env.FRONTEND_URL || 'https://plexus-bay.vercel.app',
+  credentials: true,
+  optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
@@ -35,14 +35,15 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Session configuration
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'your-session-secret-change-this',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
+  secret: process.env.SESSION_SECRET || 'your-session-secret-change-this',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
 }));
 
 // Initialize Passport

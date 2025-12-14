@@ -11,8 +11,8 @@ const router = express.Router();
 // Security configuration for cookies
 const COOKIE_OPTIONS = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
 };
 
@@ -75,7 +75,7 @@ router.get(
                 console.log(`User authenticated successfully: ${user.email}`);
 
                 // Redirect to frontend with success
-                res.redirect(`${process.env.FRONTEND_URL || 'https://plexus-bay.vercel.app'}?auth=success`);
+                res.redirect(`${process.env.FRONTEND_URL || 'https://plexus-bay.vercel.app/chat'}?auth=success`);
             } catch (error) {
                 console.error('Error in OAuth callback:', error);
                 res.redirect(`${process.env.FRONTEND_URL || 'https://plexus-bay.vercel.app'}/login?error=server_error`);
@@ -92,7 +92,7 @@ router.get(
 router.get('/user', authenticate, async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select('-sessions -__v');
-        
+
         if (!user) {
             return res.status(404).json({
                 error: 'User not found',
@@ -204,7 +204,7 @@ router.delete('/account', authenticate, async (req, res) => {
 // Error handler for authentication routes
 router.use((err, req, res, next) => {
     console.error('Auth route error:', err);
-    
+
     res.status(err.status || 500).json({
         error: err.message || 'Authentication error',
         message: 'An error occurred during authentication'
