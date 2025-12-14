@@ -13,11 +13,14 @@
     width: 100%;
     padding: 32px 32px 0;
     margin-bottom: 80px;
+    display: flex;
+    justify-content: center;
 }
 
 .logo-text {
     font-weight: 700;
-    font-size: 20px;
+    font-size: 24px;
+    color: #000000;
 }
 
 .login-content {
@@ -33,13 +36,13 @@
     font-size: 32px;
     font-weight: 700;
     margin-bottom: 12px;
-    color: #2D333A;
+    color: #000000;
     text-align: center;
 }
 
 .login-subtitle {
     font-size: 16px;
-    color: #2D333A;
+    color: #333333;
     text-align: center;
     margin-bottom: 32px;
     line-height: 1.5;
@@ -63,9 +66,10 @@
     padding: 0 24px;
     cursor: pointer;
     font-size: 16px;
-    color: #2D333A;
+    color: #000000;
     position: relative;
     transition: background-color 0.2s;
+    font-weight: 500;
 }
 
 .social-btn:hover {
