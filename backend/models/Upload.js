@@ -29,9 +29,14 @@ const UploadSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    fileData: {
+        type: Buffer,
+        required: false,
+        select: false // Don't return by default to avoid bloating responses
+    },
     storageUrl: {
         type: String,
-        required: true
+        required: false // Optional now as we use memory/buffer
     },
     metadata: {
         type: mongoose.Schema.Types.Mixed,
@@ -52,22 +57,22 @@ UploadSchema.index({ userId: 1, uploadedAt: -1 });
 UploadSchema.index({ threadId: 1, uploadedAt: -1 });
 
 // Static method to find uploads by thread
-UploadSchema.statics.findByThread = function(threadId) {
+UploadSchema.statics.findByThread = function (threadId) {
     return this.find({ threadId }).sort({ uploadedAt: -1 });
 };
 
 // Static method to find uploads by user
-UploadSchema.statics.findByUser = function(userId) {
+UploadSchema.statics.findByUser = function (userId) {
     return this.find({ userId }).sort({ uploadedAt: -1 });
 };
 
 // Instance method to check if file is an image
-UploadSchema.methods.isImage = function() {
+UploadSchema.methods.isImage = function () {
     return this.mimeType.startsWith('image/');
 };
 
 // Instance method to check if file is a document
-UploadSchema.methods.isDocument = function() {
+UploadSchema.methods.isDocument = function () {
     const docTypes = [
         'application/pdf',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

@@ -1,37 +1,29 @@
 import sharp from 'sharp';
 import mammoth from 'mammoth';
-import fs from 'fs';
-import path from 'path';
-import csv from 'csv-parser';
 import { createRequire } from 'module';
+import { Readable } from 'stream';
+import csv from 'csv-parser';
 
 const require = createRequire(import.meta.url);
 const pdfParseModule = require('pdf-parse');
 const pdfParse = pdfParseModule.default || pdfParseModule;
-const { promises: fsPromises, createReadStream } = fs;
 
 /**
  * Process image file - extract metadata and optimize
  */
-const processImage = async (filePath) => {
+const processImage = async (fileBuffer) => {
     try {
-        const image = sharp(filePath);
+        const image = sharp(fileBuffer);
         const metadata = await image.metadata();
-        
-        // Create thumbnail
-        const thumbnailPath = filePath.replace(path.extname(filePath), '_thumb.jpg');
-        await image
-            .resize(200, 200, { fit: 'inside' })
-            .jpeg({ quality: 80 })
-            .toFile(thumbnailPath);
-        
+
+        // We no longer create thumbnails on disk
+
         return {
             width: metadata.width,
             height: metadata.height,
             format: metadata.format,
             size: metadata.size,
             hasAlpha: metadata.hasAlpha,
-            thumbnailPath: thumbnailPath,
             type: 'image'
         };
     } catch (error) {
@@ -43,13 +35,12 @@ const processImage = async (filePath) => {
 /**
  * Process PDF file - extract text and metadata
  */
-const processPDF = async (filePath) => {
+const processPDF = async (fileBuffer) => {
     try {
-        const dataBuffer = await fsPromises.readFile(filePath);
-        const data = await pdfParse(dataBuffer);
-        
+        const data = await pdfParse(fileBuffer);
+
         console.log(`PDF processed: ${data.numpages} pages, ${data.text?.length || 0} characters extracted`);
-        
+
         return {
             pages: data.numpages,
             text: data.text,
@@ -66,12 +57,12 @@ const processPDF = async (filePath) => {
 /**
  * Process DOCX file - extract text
  */
-const processDOCX = async (filePath) => {
+const processDOCX = async (fileBuffer) => {
     try {
-        const result = await mammoth.extractRawText({ path: filePath });
-        
+        const result = await mammoth.extractRawText({ buffer: fileBuffer });
+
         console.log(`DOCX processed: ${result.value?.length || 0} characters extracted`);
-        
+
         return {
             text: result.value,
             messages: result.messages,
@@ -86,10 +77,10 @@ const processDOCX = async (filePath) => {
 /**
  * Process text file - read content
  */
-const processText = async (filePath) => {
+const processText = async (fileBuffer) => {
     try {
-        const text = await fsPromises.readFile(filePath, 'utf-8');
-        
+        const text = fileBuffer.toString('utf-8');
+
         return {
             text: text,
             lines: text.split('\n').length,
@@ -105,23 +96,29 @@ const processText = async (filePath) => {
 /**
  * Process CSV file - parse and extract data
  */
-const processCSV = async (filePath) => {
+const processCSV = async (fileBuffer) => {
     try {
         const rows = [];
-        
+        const stream = Readable.from(fileBuffer.toString());
+
         return new Promise((resolve, reject) => {
-            createReadStream(filePath)
+            stream
                 .pipe(csv())
                 .on('data', (row) => rows.push(row))
                 .on('end', () => {
                     const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
-                    
-                    // Convert to text representation
+
+                    // Convert to text representation (limit to ~500 rows to avoid context overflow)
                     let text = headers.join(', ') + '\n';
-                    rows.forEach(row => {
+                    const maxRows = 500;
+                    rows.slice(0, maxRows).forEach(row => {
                         text += Object.values(row).join(', ') + '\n';
                     });
-                    
+
+                    if (rows.length > maxRows) {
+                        text += `\n... ${rows.length - maxRows} more rows ...`;
+                    }
+
                     resolve({
                         rows: rows.length,
                         columns: headers.length,
@@ -143,25 +140,30 @@ const processCSV = async (filePath) => {
  * Main file processor - routes to appropriate handler
  */
 const processFile = async (file) => {
-    const { path: filePath, mimetype } = file;
-    
+    const { buffer, mimetype } = file;
+
+    if (!buffer) {
+        throw new Error('File buffer is missing');
+    }
+
     try {
         let result;
-        
+
         if (mimetype.startsWith('image/')) {
-            result = await processImage(filePath);
+            result = await processImage(buffer);
         } else if (mimetype === 'application/pdf') {
-            result = await processPDF(filePath);
+            result = await processPDF(buffer);
         } else if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-            result = await processDOCX(filePath);
+            result = await processDOCX(buffer);
         } else if (mimetype === 'text/plain') {
-            result = await processText(filePath);
+            result = await processText(buffer);
         } else if (mimetype === 'text/csv') {
-            result = await processCSV(filePath);
+            result = await processCSV(buffer);
         } else {
-            throw new Error('Unsupported file type');
+            console.warn(`Unsupported file type for processing: ${mimetype}`);
+            return { text: '', type: 'unknown' };
         }
-        
+
         return result;
     } catch (error) {
         console.error('Error in processFile:', error);
@@ -172,10 +174,12 @@ const processFile = async (file) => {
 /**
  * Encode image to base64 for GPT-4 Vision API
  */
-const encodeImageToBase64 = async (filePath) => {
+const encodeImageToBase64 = async (fileBuffer) => {
     try {
-        const buffer = await fsPromises.readFile(filePath);
-        return buffer.toString('base64');
+        if (Buffer.isBuffer(fileBuffer)) {
+            return fileBuffer.toString('base64');
+        }
+        throw new Error('Invalid input: Expected Buffer');
     } catch (error) {
         console.error('Error encoding image:', error);
         throw new Error('Failed to encode image: ' + error.message);
@@ -188,16 +192,16 @@ const encodeImageToBase64 = async (filePath) => {
 const chunkText = (text, maxChunkSize = 15000) => {
     const chunks = [];
     let currentChunk = '';
-    
+
     const sentences = text.split(/[.!?]+/);
-    
+
     for (const sentence of sentences) {
         if ((currentChunk + sentence).length > maxChunkSize) {
             if (currentChunk) {
                 chunks.push(currentChunk.trim());
                 currentChunk = '';
             }
-            
+
             // If single sentence is too long, split by words
             if (sentence.length > maxChunkSize) {
                 const words = sentence.split(' ');
@@ -216,36 +220,15 @@ const chunkText = (text, maxChunkSize = 15000) => {
             currentChunk += sentence + '. ';
         }
     }
-    
+
     if (currentChunk) {
         chunks.push(currentChunk.trim());
     }
-    
+
     return chunks;
 };
 
-/**
- * Delete file and its associated files (thumbnails, etc.)
- */
-const deleteFile = async (filePath) => {
-    try {
-        // Delete main file
-        await fsPromises.unlink(filePath);
-        
-        // Delete thumbnail if exists
-        const thumbnailPath = filePath.replace(path.extname(filePath), '_thumb.jpg');
-        try {
-            await fsPromises.unlink(thumbnailPath);
-        } catch (err) {
-            // Thumbnail might not exist, ignore error
-        }
-        
-        return true;
-    } catch (error) {
-        console.error('Error deleting file:', error);
-        throw new Error('Failed to delete file: ' + error.message);
-    }
-};
+// Removed deleteFile as we are using memory storage now
 
 export {
     processFile,
@@ -255,7 +238,6 @@ export {
     processText,
     processCSV,
     encodeImageToBase64,
-    chunkText,
-    deleteFile
+    chunkText
 };
 

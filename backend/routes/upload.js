@@ -1,17 +1,11 @@
 import express from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import rateLimit from 'express-rate-limit';
 import Joi from 'joi';
 import { optionalAuthenticate } from '../middleware/auth.js';
 import Upload from '../models/Upload.js';
-import { processFile, encodeImageToBase64, deleteFile } from '../utils/fileProcessor.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { processFile, encodeImageToBase64 } from '../utils/fileProcessor.js';
 
 const router = express.Router();
 
@@ -26,29 +20,11 @@ const ALLOWED_MIME_TYPES = {
     'text/csv': '.csv'
 };
 
+// Max file size 16MB (Mongo document limit is 16MB, keeping it safe)
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        const userId = req.user?.id ? String(req.user.id) : 'anonymous';
-        const date = new Date();
-        const dateStr = date.toISOString().split('T')[0];
-        const uploadDir = path.join(__dirname, '..', 'uploads', userId, dateStr);
-        fs.mkdirSync(uploadDir, { recursive: true });
-        cb(null, uploadDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueId = uuidv4();
-        const timestamp = Date.now();
-        const ext = path.extname(file.originalname);
-        const sanitizedName = file.originalname
-            .replace(ext, '')
-            .replace(/[^a-zA-Z0-9]/g, '_')
-            .substring(0, 50);
-        const filename = `${uniqueId}-${timestamp}-${sanitizedName}${ext}`;
-        cb(null, filename);
-    }
-});
+// Use Memory Storage
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
     if (ALLOWED_MIME_TYPES[file.mimetype]) {
@@ -166,14 +142,17 @@ router.post('/',
                     processedData = { error: procError.message, text: '' };
                 }
 
+                const uniqueFilename = `${uuidv4()}-${file.originalname}`;
+
                 const uploadRecord = new Upload({
                     userId: userId,
                     threadId: threadId,
-                    filename: file.filename,
+                    filename: uniqueFilename,
                     originalName: file.originalname,
                     mimeType: file.mimetype,
                     size: file.size,
-                    storageUrl: file.path,
+                    fileData: file.buffer, // Store buffer directly
+                    // storageUrl removed or handled gracefully
                     metadata: processedData,
                     extractedText: processedData.text || ''
                 });
@@ -198,16 +177,6 @@ router.post('/',
 
         } catch (error) {
             console.error('Upload error:', error);
-            
-            // Clean up uploaded files on error
-            if (req.files) {
-                req.files.forEach(file => {
-                    fs.unlink(file.path, (err) => {
-                        if (err) console.error('Error deleting file:', err);
-                    });
-                });
-            }
-            
             res.status(500).json({
                 error: 'Upload failed',
                 message: error.message
@@ -227,7 +196,7 @@ router.get('/:id',
     async (req, res) => {
         try {
             const upload = req.upload;
-            
+
             res.json({
                 id: upload._id,
                 filename: upload.filename,
@@ -239,10 +208,10 @@ router.get('/:id',
                 uploadedAt: upload.uploadedAt,
                 threadId: upload.threadId
             });
-            
+
         } catch (error) {
             console.error('Error fetching file metadata:', error);
-            res.status(500).json({ 
+            res.status(500).json({
                 error: 'Server error',
                 message: 'Failed to fetch file metadata'
             });
@@ -252,7 +221,7 @@ router.get('/:id',
 
 /**
  * GET /api/upload/:id/download
- * Download file
+ * Download file (served from DB buffer)
  */
 router.get('/:id/download',
     optionalAuthenticate,
@@ -260,24 +229,24 @@ router.get('/:id/download',
     checkFileOwnership,
     async (req, res) => {
         try {
-            const upload = req.upload;
-            
-            if (!fs.existsSync(upload.storageUrl)) {
-                return res.status(404).json({ 
+            // Need to fetch buffer (it's not selected by default)
+            const upload = await Upload.findById(req.params.id).select('+fileData');
+
+            if (!upload || !upload.fileData) {
+                return res.status(404).json({
                     error: 'File not found',
-                    message: 'The file no longer exists on the server'
+                    message: 'The file data could not be retrieved'
                 });
             }
-            
+
             res.setHeader('Content-Type', upload.mimeType);
             res.setHeader('Content-Disposition', `attachment; filename="${upload.originalName}"`);
-            
-            const fileStream = fs.createReadStream(upload.storageUrl);
-            fileStream.pipe(res);
-            
+
+            res.send(upload.fileData);
+
         } catch (error) {
             console.error('Error downloading file:', error);
-            res.status(500).json({ 
+            res.status(500).json({
                 error: 'Download failed',
                 message: 'Failed to download file'
             });
@@ -295,26 +264,28 @@ router.get('/:id/base64',
     checkFileOwnership,
     async (req, res) => {
         try {
-            const upload = req.upload;
-            
+            // Need to fetch buffer
+            const upload = await Upload.findById(req.params.id).select('+fileData');
+
             if (!upload.isImage()) {
-                return res.status(400).json({ 
+                return res.status(400).json({
                     error: 'Invalid file type',
                     message: 'Only images can be encoded to base64'
                 });
             }
-            
-            const base64 = await encodeImageToBase64(upload.storageUrl);
-            
+
+            // Encode buffer directly
+            const base64 = upload.fileData.toString('base64');
+
             res.json({
                 id: upload._id,
                 base64: base64,
                 mimeType: upload.mimeType
             });
-            
+
         } catch (error) {
             console.error('Error encoding image:', error);
-            res.status(500).json({ 
+            res.status(500).json({
                 error: 'Encoding failed',
                 message: 'Failed to encode image to base64'
             });
@@ -333,18 +304,16 @@ router.delete('/:id',
     async (req, res) => {
         try {
             const upload = req.upload;
-            
-            await deleteFile(upload.storageUrl);
             await Upload.findByIdAndDelete(upload._id);
-            
+
             res.json({
                 success: true,
                 message: 'File deleted successfully'
             });
-            
+
         } catch (error) {
             console.error('Error deleting file:', error);
-            res.status(500).json({ 
+            res.status(500).json({
                 error: 'Delete failed',
                 message: 'Failed to delete file'
             });
@@ -363,7 +332,7 @@ router.get('/:id/test-extraction',
     async (req, res) => {
         try {
             const upload = req.upload;
-            
+
             res.json({
                 id: upload._id,
                 originalName: upload.originalName,
@@ -373,10 +342,10 @@ router.get('/:id/test-extraction',
                 metadata: upload.metadata,
                 hasText: !!upload.extractedText && upload.extractedText.length > 0
             });
-            
+
         } catch (error) {
             console.error('Error testing extraction:', error);
-            res.status(500).json({ 
+            res.status(500).json({
                 error: 'Server error',
                 message: 'Failed to test extraction'
             });
@@ -394,16 +363,16 @@ router.get('/thread/:threadId',
         try {
             const { threadId } = req.params;
             const userId = req.user?.id;
-            
+
             const query = { threadId };
             if (userId) {
                 query.userId = userId;
             } else {
                 query.userId = { $exists: false };
             }
-            
+
             const uploads = await Upload.find(query).sort({ uploadedAt: -1 });
-            
+
             res.json({
                 threadId: threadId,
                 count: uploads.length,
@@ -417,16 +386,17 @@ router.get('/thread/:threadId',
                     metadata: upload.metadata
                 }))
             });
-            
+
         } catch (error) {
             console.error('Error fetching thread files:', error);
-            res.status(500).json({ 
+            res.status(500).json({
                 error: 'Server error',
                 message: 'Failed to fetch thread files'
             });
         }
     }
 );
+
 
 export default router;
 
