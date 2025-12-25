@@ -86,6 +86,15 @@ const Login = () => {
         setView('mobile');
     };
 
+    const getApiUrl = () => {
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+        
+        if (baseUrl.endsWith('/api')) {
+            return baseUrl;
+        }
+        return `${baseUrl}/api`;
+    };
+
     const handleSendOtp = async (providedEmail = null) => {
         if (!phoneNumber || !isValidPhoneNumber(phoneNumber)) {
             setError('Invalid phone number format. Please enter a valid number with country code.');
@@ -103,7 +112,7 @@ const Login = () => {
         setSuccess(null);
 
         try {
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+            const API_URL = getApiUrl();
             const res = await fetch(`${API_URL}/auth/send-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -132,6 +141,7 @@ const Login = () => {
                 }
             }
         } catch (err) {
+            console.error(err);
             setError('Network error. Please check your connection and try again.');
         } finally {
             setLoading(false);
@@ -149,7 +159,7 @@ const Login = () => {
         setError(null);
 
         try {
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+            const API_URL = getApiUrl();
             const res = await fetch(`${API_URL}/auth/verify-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -175,6 +185,7 @@ const Login = () => {
                 setError(data.error || 'Verification failed.');
             }
         } catch (err) {
+            console.error(err);
             setError('Network error. Please try again.');
         } finally {
             setLoading(false);
