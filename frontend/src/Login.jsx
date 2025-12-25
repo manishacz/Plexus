@@ -137,7 +137,8 @@ const Login = () => {
                     setView('email_register');
                     setError(data.message); // Inform user why they need to email
                 } else {
-                    setError(data.error || 'Failed to send OTP.');
+                    // Show detailed message if available, otherwise fallback to error or generic
+                    setError(data.message || data.error || 'Failed to send OTP.');
                 }
             }
         } catch (err) {
