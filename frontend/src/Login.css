@@ -196,3 +196,105 @@
         padding: 24px;
     }
 }
+
+/* Mobile Auth Styles */
+
+.back-nav {
+    align-self: flex-start;
+    margin-bottom: 20px;
+    cursor: pointer;
+    color: #10a37f;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.back-nav:hover {
+    text-decoration: underline;
+}
+
+.input-group {
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+/* Overriding React Phone Number Input Styles */
+.PhoneInput {
+    display: flex;
+    align-items: center;
+    border: 1px solid #c2c8d0;
+    border-radius: 6px;
+    padding: 0 12px;
+    height: 52px;
+    transition: border-color 0.2s;
+}
+
+.PhoneInput:focus-within {
+    border-color: #10a37f;
+}
+
+.PhoneInputInput {
+    border: none;
+    outline: none;
+    font-size: 16px;
+    height: 100%;
+    background: transparent;
+    color: inherit;
+}
+
+.PhoneInputCountry {
+    margin-right: 12px;
+}
+
+/* OTP Styles */
+.otp-container {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.otp-field {
+    width: 45px;
+    height: 55px;
+    border: 1px solid #c2c8d0;
+    border-radius: 8px;
+    font-size: 24px;
+    text-align: center;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.otp-field:focus {
+    border-color: #10a37f;
+    box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.2);
+}
+
+.timer-text {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.resend-container {
+    margin-bottom: 16px;
+}
+
+.text-btn {
+    background: none;
+    border: none;
+    color: #10a37f;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+}
+
+.text-btn:disabled {
+    color: #999;
+    cursor: not-allowed;
+}
+
+.continue-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}

@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
+    "libphonenumber-js": "^1.12.33",
     "markdown-to-jsx": "^7.7.13",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-markdown": "^10.1.0",
+    "react-phone-number-input": "^3.4.14",
     "react-spinners": "^0.17.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
