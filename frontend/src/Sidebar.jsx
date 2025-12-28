@@ -1,13 +1,14 @@
 import "./Sidebar.css";
-import { useContext, useEffect } from "react";
+import { useContext, useEffect, useState } from "react";
 import { MyContext } from "./MyContext.jsx";
 import {v1 as uuidv1} from "uuid";
 import UserProfile from "./UserProfile.jsx";
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://backend-plexus-cicd.onrender.com';
+import { API_URL } from "./config.js";
 
 function Sidebar() {
-    const {allThreads, setAllThreads, currThreadId, setNewChat, setPrompt, setReply, setCurrThreadId, setPrevChats} = useContext(MyContext);
+    const {allThreads, setAllThreads, currThreadId, setNewChat, setPrompt, setReply, setCurrThreadId, setPrevChats, setIsSidebarOpen} = useContext(MyContext);
+    const [searchTerm, setSearchTerm] = useState("");
 
     const getAllThreads = async () => {
         try {
@@ -74,24 +75,50 @@ function Sidebar() {
         }
     }
 
+    const filteredThreads = allThreads.filter(thread => 
+        thread.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
     return (
         <section className="sidebar">
-            <button onClick={createNewChat}>
-                <img src="src/assets/plx_logo.png" alt="gpt logo" className="logo"></img>
-                <span>New Chat</span>
-                <span><i className="fa-solid fa-pen-to-square"></i></span>
-            </button>
+            <div className="sidebar-header">
+                <div className="header-top">
+                    {/* Placeholder for Logo or Brand if needed, or simplifed New Chat row */}
+                    <button className="close-sidebar-btn" onClick={() => setIsSidebarOpen(false)} title="Close Sidebar">
+                       <img src="https://cdn-icons-png.flaticon.com/128/2989/2989988.png" alt="Close" style={{width: '20px', filter: 'invert(1)'}}/>
+                    </button>
+                    <button className="new-chat-icon-btn" onClick={createNewChat} title="New Chat">
+                        <i className="fa-regular fa-pen-to-square"></i>
+                    </button>
+                </div>
+            </div>
 
+            <div className="search-container">
+                <div className="search-wrapper">
+                     <i className="fa-solid fa-magnifying-glass search-icon"></i>
+                     <input 
+                        type="text" 
+                        placeholder="Search chats..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="search-input"
+                     />
+                </div>
+            </div>
+
+            <div className="history-label">
+                <span>Your chats</span>
+            </div>
 
             <ul className="history">
                 {
-                    allThreads?.map((thread, idx) => (
+                    filteredThreads?.map((thread, idx) => (
                         <li key={idx}
                             onClick={() => changeThread(thread.threadId)}
                             className={thread.threadId === currThreadId ? "highlighted": " "}
                         >
-                            {thread.title}
-                            <i className="fa-solid fa-trash"
+                            <span className="thread-title">{thread.title}</span>
+                            <i className="fa-solid fa-trash delete-icon"
                                 onClick={(e) => {
                                     e.stopPropagation(); //stop event bubbling
                                     deleteThread(thread.threadId);

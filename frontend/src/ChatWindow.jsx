@@ -5,13 +5,14 @@ import { MyContext } from "./MyContext.jsx";
 import { useContext, useState, useEffect } from "react";
 import {SyncLoader} from "react-spinners";
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://backend-plexus-cicd.onrender.com';
+import { API_URL } from "./config.js";
 
 function ChatWindow() {
-    const {prompt, setPrompt, reply, setReply, currThreadId, setPrevChats, setNewChat} = useContext(MyContext);
+    const {prompt, setPrompt, reply, setReply, currThreadId, setPrevChats, setNewChat, isSidebarOpen, setIsSidebarOpen} = useContext(MyContext);
     const [loading, setLoading] = useState(false);
     const [showFileUpload, setShowFileUpload] = useState(false);
     const [uploadedFiles, setUploadedFiles] = useState([]);
+    const [listening, setListening] = useState(false);
 
     const getReply = async () => {
         if (!prompt.trim()) return;
@@ -77,7 +78,12 @@ function ChatWindow() {
     return (
         <div className="chatWindow">
             <div className="navbar">
-                <span>Plexus</span>
+                {!isSidebarOpen && (
+                    <button className="open-sidebar-btn" onClick={() => setIsSidebarOpen(true)} title="Open Sidebar">
+                       <img src="https://cdn-icons-png.flaticon.com/128/2989/2989988.png" alt="Open" style={{width: '20px', filter: 'invert(1)', transform: 'rotate(180deg)'}}/>
+                    </button>
+                )}
+                <span className="navbar-logo-text">Plexus</span>
             </div>
 
             <Chat></Chat>
@@ -136,6 +142,15 @@ function ChatWindow() {
                         }}
                         disabled={loading}
                     />
+                    
+                    <button 
+                        className={`mic-button ${listening ? 'listening' : ''}`}
+                        title="Voice Input (Coming Soon)"
+                        onClick={() => console.log("Voice feature pending implementation")} // Placeholder
+                    >
+                        <i className="fa-solid fa-microphone"></i>
+                    </button>
+
                     <button
                         id="submit"
                         onClick={getReply}

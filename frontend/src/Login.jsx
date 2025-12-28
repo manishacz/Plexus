@@ -4,6 +4,7 @@ import './Login.css';
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css'; // Import styles
 import { PulseLoader } from 'react-spinners'; // Assuming you might have this or I should use simple text or CSS spinner. usage shows react-spinners in package.json
+import { API_URL } from "./config.js";
 
 const Login = () => {
     const { login, isAuthenticated, checkAuthStatus } = useAuth();
@@ -87,12 +88,17 @@ const Login = () => {
     };
 
     const getApiUrl = () => {
-        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+        // Use the centralized API_URL which is base URL (no /api)
+        // Login endpoints expect /api/auth/...
+        // But our config returns base. 
+        // Let's standardise: Helper to ensure we have /api if needed.
+        // Actually, centralized API_URL is base.
+        // So we just return API_URL + '/api' if not already present?
+        // Wait, standard fetch in Login uses `${API_URL}/auth/send-otp`.
+        // If API_URL is base, we need `${API_URL}/api/auth/send-otp`.
         
-        if (baseUrl.endsWith('/api')) {
-            return baseUrl;
-        }
-        return `${baseUrl}/api`;
+        return `${API_URL}/api`;
+        // Simple as that because config.js guarantees base URL (http://loc:8080 or https://back...com)
     };
 
     const handleSendOtp = async (providedEmail = null) => {
@@ -251,8 +257,20 @@ const Login = () => {
             </div>
 
             <div className="email-login">
-                <input type="email" placeholder="Email address" className="email-input" disabled />
-                <button className="continue-btn" disabled onClick={() => {}}>Continue (Use Social/Phone)</button>
+                <input 
+                    type="email" 
+                    placeholder="Email address" 
+                    className="email-input" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                />
+                <button 
+                    className="continue-btn" 
+                    onClick={() => setView('mobile')}
+                    disabled={!email}
+                >
+                    Continue (Use Social/Phone)
+                </button>
             </div>
         </div>
     );

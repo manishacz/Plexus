@@ -2,7 +2,7 @@ import { useState, useRef, useContext } from 'react';
 import { MyContext } from './MyContext';
 import './FileUpload.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://backend-plexus-cicd.onrender.com';
+import { API_URL } from "./config.js";
 
 const ALLOWED_TYPES = {
     'image/png': 'PNG',

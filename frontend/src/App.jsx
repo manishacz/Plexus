@@ -16,13 +16,16 @@ function AppContent() {
   const [newChat, setNewChat] = useState(true);//track if its a new chat is started and its intialy is true
   const [allThreads, setAllThreads] = useState([]);
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
   const providerValues = {
     prompt, setPrompt,
     reply, setReply,
     currThreadId, setCurrThreadId,
     newChat, setNewChat,
     prevChats, setPrevChats,
-    allThreads, setAllThreads
+    allThreads, setAllThreads,
+    isSidebarOpen, setIsSidebarOpen
   };
 
   // Show loading state while checking authentication
@@ -44,8 +47,8 @@ function AppContent() {
   return (
     <div className='app'>
       <MyContext.Provider value={providerValues}>
-          <Sidebar></Sidebar>
-          <ChatWindow></ChatWindow>
+          {isSidebarOpen && <Sidebar />}
+          <ChatWindow />
         </MyContext.Provider>
     </div>
   );
