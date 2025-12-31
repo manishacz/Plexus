@@ -8,7 +8,7 @@ import validator from 'validator';
 import { parsePhoneNumber } from 'libphonenumber-js';
 import otpGenerator from 'otp-generator';
 import bcrypt from 'bcryptjs';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import Otp from '../models/Otp.js';
 
 const router = express.Router();
@@ -217,20 +217,8 @@ router.use((err, req, res, next) => {
 });
 
 
-// Nodemailer transporter setup
-// Nodemailer transporter setup
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // true for 465, false for other ports
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    tls: {
-        rejectUnauthorized: false
-    }
-});
+// Resend client setup
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Helper to mask email
 const maskEmail = (email) => {
@@ -323,28 +311,38 @@ router.post('/send-otp', authRateLimiter, async (req, res) => {
             { upsert: true, new: true }
         );
 
-        // 5. Send Email
-        const mailOptions = {
-            from: process.env.EMAIL_FROM || 'noreply@plexus.com',
-            to: targetEmail,
-            subject: 'Your Plexus Login OTP',
-            text: `Your OTP for Plexus is ${otp}. It expires in 10 minutes.`,
-            html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px;">
-                    <h2>Plexus Verification</h2>
-                    <p>Your One-Time Password (OTP) is:</p>
-                    <h1 style="color: #4A90E2; letter-spacing: 5px;">${otp}</h1>
-                    <p>This code will expire in 10 minutes.</p>
-                    <p>If you didn't request this, please ignore this email.</p>
-                </div>
-            `
-        };
+        // 5. Send Email via Resend
+        try {
+            const { data, error } = await resend.emails.send({
+                from: process.env.EMAIL_FROM || 'Plexus <onboarding@resend.dev>',
+                to: [targetEmail],
+                subject: 'Your Plexus Login OTP',
+                html: `
+                    <div style="font-family: Arial, sans-serif; padding: 20px;">
+                        <h2>Plexus Verification</h2>
+                        <p>Your One-Time Password (OTP) is:</p>
+                        <h1 style="color: #4A90E2; letter-spacing: 5px;">${otp}</h1>
+                        <p>This code will expire in 10 minutes.</p>
+                        <p>If you didn't request this, please ignore this email.</p>
+                    </div>
+                `
+            });
 
-        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-            await transporter.sendMail(mailOptions);
-            console.log(`OTP sent to ${targetEmail}`);
-        } else {
-            console.log(`[DEV MODE] OTP for ${targetEmail}: ${otp}`);
+            if (error) {
+                console.error('Resend error:', error);
+                return res.status(500).json({
+                    error: 'Email Sending Failed',
+                    message: 'Failed to send OTP email. ' + error.message
+                });
+            }
+
+            console.log(`OTP sent to ${targetEmail}, Resend ID: ${data?.id}`);
+        } catch (mailError) {
+            console.error('Resend exception:', mailError);
+            return res.status(500).json({
+                error: 'Email Sending Failed',
+                message: 'Failed to send OTP email. Please try again later.'
+            });
         }
 
         res.json({
