@@ -15,27 +15,27 @@ export const AuthProvider = ({ children }) => {
     // }, []);
     // Check if user is authenticated on mount and handle OAuth redirect query
     useEffect(() => {
-        (async () => {
-            const params = new URLSearchParams(window.location.search);
-            const authParam = params.get('auth');
+    (async () => {
+        const params = new URLSearchParams(window.location.search);
+        const authParam = params.get('auth');
 
-            if (authParam === 'success') {
-                // OAuth redirect returned with ?auth=success
-                const ok = await checkAuthStatus();
-                // remove query param without reloading
-                window.history.replaceState({}, '', window.location.pathname);
-                if (ok) {
-                    // navigate to home after successful login
-                    window.location.href = '/chat';
-                }
-                else if (document.cookie.includes('token=')) {
-                    await checkAuthStatus();
-                } else {
-                    setLoading(false);
-                }
+        if (authParam === 'success') {
+            const ok = await checkAuthStatus();
+            window.history.replaceState({}, '', window.location.pathname);
+            if (ok) {
+                window.location.href = '/chat';
             }
-        })();
+        } else {
+            if (document.cookie.includes('token=')) {
+                await checkAuthStatus();
+            } else {
+                setUser(null);
+                setLoading(false);
+            }
+        }
+    })();
     }, []);
+
         const checkAuthStatus = async () => {
         if (!document.cookie.includes('token=')) {
             setUser(null);
