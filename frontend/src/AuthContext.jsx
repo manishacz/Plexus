@@ -28,39 +28,44 @@ export const AuthProvider = ({ children }) => {
                     // navigate to home after successful login
                     window.location.href = '/chat';
                 }
-            } else {
-                await checkAuthStatus();
+                else if (document.cookie.includes('token=')) {
+                    await checkAuthStatus();
+                } else {
+                    setLoading(false);
+                }
             }
         })();
     }, []);
-
-    const checkAuthStatus = async () => {
+        const checkAuthStatus = async () => {
+        if (!document.cookie.includes('token=')) {
+            setUser(null);
+            setLoading(false);
+            return false;
+        }
+    
         try {
             const response = await fetch(`${API_URL}/api/auth/user`, {
                 method: 'GET',
                 credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+                headers: { 'Content-Type': 'application/json' }
             });
-
-            if (response.ok) {
-                const data = await response.json();
-                setUser(data.user);
-                return true;
-            } else {
+    
+            if (!response.ok) {
                 setUser(null);
                 return false;
             }
+    
+            const data = await response.json();
+            setUser(data.user);
+            return true;
         } catch (err) {
-            console.error('Auth check failed:', err);
             setUser(null);
             return false;
         } finally {
             setLoading(false);
         }
     };
-
+    
     const login = () => {
         // Redirect to Google OAuth
         window.location.href = `${API_URL}/api/auth/google`;
