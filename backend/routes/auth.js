@@ -233,9 +233,8 @@ const maskEmail = (email) => {
  */
 router.post('/send-otp', authRateLimiter, async (req, res) => {
     try {
-        const { phoneNumber, countryCode, email, recaptchaToken } = req.body;
+        const { phoneNumber, email } = req.body;
 
-        // 1. Validate Phone Number
         if (!phoneNumber) {
             return res.status(400).json({ error: 'Phone number is required' });
         }
@@ -244,40 +243,37 @@ router.post('/send-otp', authRateLimiter, async (req, res) => {
         if (!phoneNumberParsed || !phoneNumberParsed.isValid()) {
             return res.status(400).json({ error: 'Invalid phone number format' });
         }
-        const formattedPhoneNumber = phoneNumberParsed.number; // E.164 format
 
-        // 2. Check if User exists
+        const formattedPhoneNumber = phoneNumberParsed.number;
+
         let user = await User.findOne({ phoneNumber: formattedPhoneNumber });
         let targetEmail;
 
         if (user) {
             targetEmail = user.email;
         } else {
-            // New User Flow
             if (!email) {
                 return res.status(404).json({
-                    error: 'User not found',
-                    code: 'EMAIL_REQUIRED',
-                    message: 'Phone number not registered. Please provide email to sign up.'
+                    error: 'EMAIL_REQUIRED',
+                    message: 'Phone number not registered. Please provide email.'
                 });
             }
+
             if (!validator.isEmail(email)) {
                 return res.status(400).json({ error: 'Invalid email format' });
             }
 
-            // Check if email is already taken by ANOTHER user
             const existingEmailUser = await User.findOne({ email });
             if (existingEmailUser) {
                 return res.status(400).json({
                     error: 'Email already registered',
-                    message: 'This email is already associated with an account. Please log in with email.'
+                    message: 'Please log in using email.'
                 });
             }
 
             targetEmail = email;
         }
 
-        // 3. Generate OTP
         const otp = otpGenerator.generate(6, {
             digits: true,
             lowerCaseAlphabets: false,
@@ -286,15 +282,7 @@ router.post('/send-otp', authRateLimiter, async (req, res) => {
         });
 
         const otpHash = await bcrypt.hash(otp, 10);
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-        // 4. Save/Update OTP in DB
-        // Check for existing OTP record to handle rate limiting/attempts?
-        // For simplicity, we upsert or just create new. API spec says "canResendAfter".
-        // Let's use upsert on phoneNumber to prevent flooding DB, or just create new.
-        // The Otp model has TTL, so creating new is fine, but we might want to track attempts.
-        // Let's find existing valid OTP to check "canResendAfter" logic if strict, 
-        // but typically we just overwrite for a "Resend/Send" action.
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
         await Otp.findOneAndUpdate(
             { phoneNumber: formattedPhoneNumber },
@@ -305,57 +293,57 @@ router.post('/send-otp', authRateLimiter, async (req, res) => {
                 attempts: 0,
                 verified: false,
                 requestIp: req.ip,
-                requestUserAgent: req.get('User-Agent'),
-                inputEmail: email // Store provided email for verified signup
+                requestUserAgent: req.get('User-Agent')
             },
             { upsert: true, new: true }
         );
 
-        // 5. Send Email via Resend
-        try {
-            const { data, error } = await resend.emails.send({
-                from: process.env.EMAIL_FROM || 'Plexus <onboarding@resend.dev>',
-                to: [targetEmail],
-                subject: 'Your Plexus Login OTP',
-                html: `
-                    <div style="font-family: Arial, sans-serif; padding: 20px;">
-                        <h2>Plexus Verification</h2>
-                        <p>Your One-Time Password (OTP) is:</p>
-                        <h1 style="color: #4A90E2; letter-spacing: 5px;">${otp}</h1>
-                        <p>This code will expire in 10 minutes.</p>
-                        <p>If you didn't request this, please ignore this email.</p>
-                    </div>
-                `
+        const isDev = process.env.NODE_ENV !== 'production';
+
+        if (isDev) {
+            return res.json({
+                success: true,
+                message: 'OTP generated (development mode)',
+                otp,
+                expiresIn: 600,
+                email: maskEmail(targetEmail)
             });
+        }
 
-            if (error) {
-                console.error('Resend error:', error);
-                return res.status(500).json({
-                    error: 'Email Sending Failed',
-                    message: 'Failed to send OTP email. ' + error.message
-                });
-            }
+        const { data, error } = await resend.emails.send({
+            from: process.env.EMAIL_FROM || 'Plexus <onboarding@resend.dev>',
+            to: [targetEmail],
+            subject: 'Your Plexus Login OTP',
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h2>Plexus Verification</h2>
+                    <p>Your One-Time Password (OTP) is:</p>
+                    <h1 style="letter-spacing: 5px;">${otp}</h1>
+                    <p>This code will expire in 10 minutes.</p>
+                </div>
+            `
+        });
 
-            console.log(`OTP sent to ${targetEmail}, Resend ID: ${data?.id}`);
-        } catch (mailError) {
-            console.error('Resend exception:', mailError);
+        if (error) {
             return res.status(500).json({
-                error: 'Email Sending Failed',
-                message: 'Failed to send OTP email. Please try again later.'
+                error: 'Email sending failed',
+                message: error.message
             });
         }
 
         res.json({
             success: true,
-            message: 'OTP sent to registered email',
+            message: 'OTP sent successfully',
             expiresIn: 600,
-            email: maskEmail(targetEmail),
-            canResendAfter: 60
+            email: maskEmail(targetEmail)
         });
 
     } catch (error) {
         console.error('Send OTP error:', error);
-        res.status(500).json({ error: 'Failed to send OTP', message: error.message });
+        res.status(500).json({
+            error: 'Failed to send OTP',
+            message: error.message
+        });
     }
 });
 
