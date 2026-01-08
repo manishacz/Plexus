@@ -69,6 +69,9 @@ configurePassport();
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/auth/send-otp", authRoutes);
+app.use("/api/auth/verify-otp", authRoutes);
+app.use("/api/auth/resend-otp", authRoutes);
 app.use("/api", chatRoutes);
 app.use("/api/upload", uploadRoutes);
 
