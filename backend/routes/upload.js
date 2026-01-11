@@ -58,7 +58,26 @@ const uploadRateLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => req.user?.id || req.ip
+    // CRITICAL: Proper key generation for proxied requests
+    keyGenerator: (req) => {
+        // Use authenticated user ID first (most accurate)
+        if (req.user?.id) {
+            return `user:${req.user.id}`;
+        }
+
+        // Fallback to IP from proxy headers
+        const forwarded = req.headers['x-forwarded-for'];
+        const ip = forwarded
+            ? forwarded.split(',')[0].trim()
+            : req.ip || req.connection.remoteAddress;
+
+        return `ip:${ip}`;
+    },
+    // Skip rate limiting for successful operations (optional optimization)
+    skip: (req, res) => {
+        // Skip if response was successful (don't penalize successful uploads)
+        return res.statusCode < 400;
+    }
 });
 
 const validateFileId = (req, res, next) => {

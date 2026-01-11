@@ -1,210 +1,228 @@
 import { useState, useRef, useContext } from 'react';
+import { Upload, X, File, Image, FileText, Loader2, CheckCircle2 } from 'lucide-react';
 import { MyContext } from './MyContext';
 import './FileUpload.css';
-
 import { API_URL } from "./config.js";
 
-const ALLOWED_TYPES = {
-    'image/png': 'PNG',
-    'image/jpeg': 'JPEG',
-    'image/jpg': 'JPEG',
-    'image/webp': 'WebP',
-    'application/pdf': 'PDF',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
-    'text/plain': 'TXT',
-    'text/csv': 'CSV'
-};
+const FileUpload = ({ onFileUploaded }) => {
+  const { currThreadId } = useContext(MyContext);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [localUploadedFiles, setLocalUploadedFiles] = useState([]); // Track locally for UI
+  const [error, setError] = useState(null);
+  const fileInputRef = useRef(null);
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_FILES = 5;
+  const ALLOWED_TYPES = {
+    'application/pdf': { icon: FileText, color: 'icon-red' },
+    'image/png': { icon: Image, color: 'icon-blue' },
+    'image/jpeg': { icon: Image, color: 'icon-blue' },
+    'image/jpg': { icon: Image, color: 'icon-blue' },
+    'text/plain': { icon: File, color: 'icon-gray' },
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+      icon: FileText,
+      color: 'icon-blue-dark'
+    },
+    'text/csv': { icon: FileText, color: 'icon-green' }
+  };
 
-function FileUpload({ onUploadComplete }) {
-    const { currThreadId } = useContext(MyContext);
-    const [files, setFiles] = useState([]);
-    const [uploading, setUploading] = useState(false);
-    const [dragActive, setDragActive] = useState(false);
-    const [error, setError] = useState(null);
-    const fileInputRef = useRef(null);
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
 
-    const validateFile = (file) => {
-        if (!ALLOWED_TYPES[file.type]) {
-            return `${file.name}: Unsupported file type`;
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!ALLOWED_TYPES[file.type]) {
+      setError(`File type ${file.type} is not supported`);
+      return;
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size must be less than 10MB');
+      return;
+    }
+
+    setSelectedFile(file);
+    setError(null);
+  };
+
+  const uploadFile = async () => {
+    if (!selectedFile) return;
+
+    setUploading(true);
+    setUploadProgress(0);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('threadId', currThreadId);
+
+    try {
+      // Fake progress for UX since fetch doesn't support progress events easily
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+           if (prev >= 90) return prev;
+           return prev + 10;
+        });
+      }, 200);
+
+      const response = await fetch(`${API_URL}/api/upload/single`, {
+        method: 'POST',
+        headers: {
+            // 'Content-Type': 'multipart/form-data' // Do NOT set this manually with FormData
+        },
+        credentials: 'include',
+        body: formData
+      });
+
+      clearInterval(progressInterval);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Upload failed');
+      }
+
+      const result = await response.json();
+      
+      setUploadProgress(100);
+      setLocalUploadedFiles(prev => [...prev, result.file]);
+      
+      // Notify parent component
+      if (onFileUploaded) {
+        onFileUploaded(result.file);
+      }
+
+      // Reset state for next upload
+      setTimeout(() => {
+        setSelectedFile(null);
+        setUploading(false);
+        setUploadProgress(0);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
         }
-        if (file.size > MAX_FILE_SIZE) {
-            return `${file.name}: File size exceeds 10MB`;
-        }
-        return null;
-    };
+      }, 1000);
 
-    const handleFiles = (newFiles) => {
-        setError(null);
-        const fileArray = Array.from(newFiles);
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError(err.message);
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const removeSelectedFile = () => {
+    setSelectedFile(null);
+    setError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const FileIcon = selectedFile && ALLOWED_TYPES[selectedFile.type]?.icon;
+  const iconColorClass = selectedFile && ALLOWED_TYPES[selectedFile.type]?.color;
+
+  return (
+    <div className="file-upload-wrapper">
+      {/* File Input Trigger */}
+      <div className="file-input-group">
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={handleFileSelect}
+          accept=".pdf,.png,.jpg,.jpeg,.docx,.txt,.csv"
+          className="hidden-input"
+          id="file-upload"
+          disabled={uploading}
+        />
         
-        if (files.length + fileArray.length > MAX_FILES) {
-            setError(`Maximum ${MAX_FILES} files allowed`);
-            return;
-        }
+        <label
+          htmlFor="file-upload"
+          className={`file-select-label ${uploading ? 'disabled' : ''}`}
+        >
+          <Upload size={18} />
+          <span>{uploading ? 'Uploading...' : 'Attach File'}</span>
+        </label>
 
-        const validFiles = [];
-        for (const file of fileArray) {
-            const error = validateFile(file);
-            if (error) {
-                setError(error);
-                return;
-            }
-            validFiles.push(file);
-        }
+        {selectedFile && !uploading && (
+          <button
+            onClick={uploadFile}
+            className="upload-submit-btn"
+          >
+            Upload
+          </button>
+        )}
+      </div>
 
-        setFiles(prev => [...prev, ...validFiles]);
-    };
+      {/* Selected File Preview */}
+      {selectedFile && (
+        <div className="selected-file-preview">
+          {FileIcon && <FileIcon className={`file-icon-lucide ${iconColorClass}`} size={24} />}
+          
+          <div className="file-preview-info">
+            <p className="file-name-text">{selectedFile.name}</p>
+            <p className="file-size-text">{formatFileSize(selectedFile.size)}</p>
+          </div>
 
-    const handleDrag = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.type === 'dragenter' || e.type === 'dragover') {
-            setDragActive(true);
-        } else if (e.type === 'dragleave') {
-            setDragActive(false);
-        }
-    };
-
-    const handleDrop = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setDragActive(false);
-        
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            handleFiles(e.dataTransfer.files);
-        }
-    };
-
-    const handleChange = (e) => {
-        if (e.target.files && e.target.files.length > 0) {
-            handleFiles(e.target.files);
-        }
-    };
-
-    const removeFile = (index) => {
-        setFiles(prev => prev.filter((_, i) => i !== index));
-        setError(null);
-    };
-
-    const uploadFiles = async () => {
-        if (files.length === 0) return;
-
-        setUploading(true);
-        setError(null);
-
-        const formData = new FormData();
-        files.forEach(file => formData.append('files', file));
-        formData.append('threadId', currThreadId);
-
-        try {
-            const response = await fetch(`${API_URL}/api/upload`, {
-                method: 'POST',
-                credentials: 'include',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const data = await response.json();
-                setError(data.message || 'Upload failed');
-                return;
-            }
-            
-            const data = await response.json();
-            setFiles([]);
-            if (onUploadComplete) {
-                onUploadComplete(data.files);
-            }
-        } catch (err) {
-            console.error('Upload error:', err);
-            setError('Failed to upload files. Please try again.');
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    const formatFileSize = (bytes) => {
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    };
-
-    return (
-        <div className="file-upload-container">
-            <div
-                className={`file-drop-zone ${dragActive ? 'active' : ''}`}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
+          {uploading ? (
+            <Loader2 className="spinner-icon" size={20} />
+          ) : (
+            <button
+              onClick={removeSelectedFile}
+              className="remove-btn-icon"
             >
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept={Object.keys(ALLOWED_TYPES).join(',')}
-                    onChange={handleChange}
-                    style={{ display: 'none' }}
-                />
-                <i className="fa-solid fa-cloud-arrow-up"></i>
-                <p>Drag & drop files here or click to browse</p>
-                <span>PNG, JPEG, WebP, PDF, DOCX, TXT, CSV (Max 10MB, 5 files)</span>
-            </div>
-
-            {error && (
-                <div className="upload-error">
-                    <i className="fa-solid fa-circle-exclamation"></i>
-                    {error}
-                </div>
-            )}
-
-            {files.length > 0 && (
-                <div className="file-list">
-                    {files.map((file, index) => (
-                        <div key={index} className="file-item">
-                            <div className="file-info">
-                                <i className={`fa-solid ${file.type.startsWith('image/') ? 'fa-image' : 'fa-file'}`}></i>
-                                <div className="file-details">
-                                    <span className="file-name">{file.name}</span>
-                                    <span className="file-size">{formatFileSize(file.size)}</span>
-                                </div>
-                            </div>
-                            <button
-                                className="remove-file"
-                                onClick={() => removeFile(index)}
-                                disabled={uploading}
-                            >
-                                <i className="fa-solid fa-xmark"></i>
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {files.length > 0 && (
-                <button
-                    className="upload-button"
-                    onClick={uploadFiles}
-                    disabled={uploading}
-                >
-                    {uploading ? (
-                        <>
-                            <i className="fa-solid fa-spinner fa-spin"></i>
-                            Uploading...
-                        </>
-                    ) : (
-                        <>
-                            <i className="fa-solid fa-upload"></i>
-                            Upload {files.length} file{files.length > 1 ? 's' : ''}
-                        </>
-                    )}
-                </button>
-            )}
+              <X size={18} />
+            </button>
+          )}
         </div>
-    );
-}
+      )}
+
+      {/* Upload Progress */}
+      {uploading && (
+        <div className="upload-progress-container">
+          <div className="progress-bar-bg">
+            <div
+              className="progress-bar-fill"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+          <p className="progress-text">
+            {uploadProgress < 100 ? 'Processing file...' : 'Upload complete!'}
+          </p>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="upload-error-message">
+          <p>{error}</p>
+        </div>
+      )}
+
+      {/* Locally Uploaded Files List (Visual Confirmation) */}
+      {localUploadedFiles.length > 0 && (
+        <div className="uploaded-list">
+          <p className="uploaded-list-title">Attached Files:</p>
+          {localUploadedFiles.map((file, index) => (
+            <div key={index} className="uploaded-file-item">
+              <CheckCircle2 size={16} className="success-icon" />
+              <span className="uploaded-filename">{file.originalName}</span>
+              {file.hasText && (
+                <span className="processed-badge">✓ Processed</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default FileUpload;

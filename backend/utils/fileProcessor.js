@@ -3,10 +3,9 @@ import mammoth from 'mammoth';
 import { createRequire } from 'module';
 import { Readable } from 'stream';
 import csv from 'csv-parser';
+import PDFParser from 'pdf2json';
 
 const require = createRequire(import.meta.url);
-const pdfParseModule = require('pdf-parse');
-const pdfParse = pdfParseModule.default || pdfParseModule;
 
 /**
  * Process image file - extract metadata and optimize
@@ -15,8 +14,6 @@ const processImage = async (fileBuffer) => {
     try {
         const image = sharp(fileBuffer);
         const metadata = await image.metadata();
-
-        // We no longer create thumbnails on disk
 
         return {
             width: metadata.width,
@@ -33,25 +30,51 @@ const processImage = async (fileBuffer) => {
 };
 
 /**
- * Process PDF file - extract text and metadata
+ * Process PDF file - extract text and metadata using pdf2json
  */
 const processPDF = async (fileBuffer) => {
-    try {
-        const data = await pdfParse(fileBuffer);
+    return new Promise((resolve, reject) => {
+        const pdfParser = new PDFParser();
 
-        console.log(`PDF processed: ${data.numpages} pages, ${data.text?.length || 0} characters extracted`);
+        pdfParser.on('pdfParser_dataError', (errData) => {
+            reject(new Error(`PDF parse error: ${errData.parserError}`));
+        });
 
-        return {
-            pages: data.numpages,
-            text: data.text,
-            info: data.info,
-            metadata: data.metadata,
-            type: 'pdf'
-        };
-    } catch (error) {
-        console.error('Error processing PDF:', error);
-        throw new Error('Failed to process PDF: ' + error.message);
-    }
+        pdfParser.on('pdfParser_dataReady', (pdfData) => {
+            try {
+                // Extract text from PDF data structure (pdf2json format)
+                // pdf2json returns an object with Pages -> Texts -> R -> T (URL encoded)
+
+                // Helper to extract text from pages
+                let textContent = '';
+
+                if (pdfData && pdfData.Pages) {
+                    textContent = pdfData.Pages.map(page => {
+                        return page.Texts.map(t => decodeURIComponent(t.R[0].T)).join(' ');
+                    }).join('\n\n');
+                } else if (pdfParser.getRawTextContent) {
+                    textContent = pdfParser.getRawTextContent();
+                }
+
+                const pages = pdfData.Pages ? pdfData.Pages.length : 0;
+
+                console.log(`PDF processed: ${pages} pages, ${textContent.length} characters`);
+
+                resolve({
+                    pages: pages,
+                    text: textContent,
+                    info: pdfData.Meta || {},
+                    metadata: pdfData,
+                    type: 'pdf'
+                });
+            } catch (error) {
+                reject(new Error(`Failed to extract PDF text: ${error.message}`));
+            }
+        });
+
+        // pdf2json expects a buffer if using parseBuffer
+        pdfParser.parseBuffer(fileBuffer);
+    });
 };
 
 /**
@@ -60,9 +83,7 @@ const processPDF = async (fileBuffer) => {
 const processDOCX = async (fileBuffer) => {
     try {
         const result = await mammoth.extractRawText({ buffer: fileBuffer });
-
         console.log(`DOCX processed: ${result.value?.length || 0} characters extracted`);
-
         return {
             text: result.value,
             messages: result.messages,
@@ -80,7 +101,6 @@ const processDOCX = async (fileBuffer) => {
 const processText = async (fileBuffer) => {
     try {
         const text = fileBuffer.toString('utf-8');
-
         return {
             text: text,
             lines: text.split('\n').length,
@@ -107,24 +127,20 @@ const processCSV = async (fileBuffer) => {
                 .on('data', (row) => rows.push(row))
                 .on('end', () => {
                     const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
-
-                    // Convert to text representation (limit to ~500 rows to avoid context overflow)
                     let text = headers.join(', ') + '\n';
                     const maxRows = 500;
                     rows.slice(0, maxRows).forEach(row => {
                         text += Object.values(row).join(', ') + '\n';
                     });
-
                     if (rows.length > maxRows) {
                         text += `\n... ${rows.length - maxRows} more rows ...`;
                     }
-
                     resolve({
                         rows: rows.length,
                         columns: headers.length,
                         headers: headers,
                         text: text,
-                        preview: rows.slice(0, 10), // First 10 rows
+                        preview: rows.slice(0, 10),
                         type: 'csv'
                     });
                 })
@@ -148,7 +164,6 @@ const processFile = async (file) => {
 
     try {
         let result;
-
         if (mimetype.startsWith('image/')) {
             result = await processImage(buffer);
         } else if (mimetype === 'application/pdf') {
@@ -163,7 +178,6 @@ const processFile = async (file) => {
             console.warn(`Unsupported file type for processing: ${mimetype}`);
             return { text: '', type: 'unknown' };
         }
-
         return result;
     } catch (error) {
         console.error('Error in processFile:', error);
@@ -187,13 +201,14 @@ const encodeImageToBase64 = async (fileBuffer) => {
 };
 
 /**
- * Chunk text for LLM processing (max 4096 tokens ≈ 16000 characters)
+ * Chunk text for LLM processing
  */
 const chunkText = (text, maxChunkSize = 15000) => {
+    if (!text) return [];
     const chunks = [];
     let currentChunk = '';
-
-    const sentences = text.split(/[.!?]+/);
+    // Simple sentence splitting to avoid complex regex issues
+    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
 
     for (const sentence of sentences) {
         if ((currentChunk + sentence).length > maxChunkSize) {
@@ -201,9 +216,8 @@ const chunkText = (text, maxChunkSize = 15000) => {
                 chunks.push(currentChunk.trim());
                 currentChunk = '';
             }
-
-            // If single sentence is too long, split by words
             if (sentence.length > maxChunkSize) {
+                // Split long sentence by space
                 const words = sentence.split(' ');
                 for (const word of words) {
                     if ((currentChunk + word).length > maxChunkSize) {
@@ -214,21 +228,17 @@ const chunkText = (text, maxChunkSize = 15000) => {
                     }
                 }
             } else {
-                currentChunk = sentence + '. ';
+                currentChunk = sentence;
             }
         } else {
-            currentChunk += sentence + '. ';
+            currentChunk += sentence;
         }
     }
-
     if (currentChunk) {
         chunks.push(currentChunk.trim());
     }
-
     return chunks;
 };
-
-// Removed deleteFile as we are using memory storage now
 
 export {
     processFile,
@@ -240,4 +250,3 @@ export {
     encodeImageToBase64,
     chunkText
 };
-

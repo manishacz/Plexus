@@ -53,9 +53,8 @@ function ChatWindow() {
         setLoading(false);
     }
 
-    const handleUploadComplete = (files) => {
-        setUploadedFiles(files);
-        setShowFileUpload(false);
+    const handleUploadComplete = (file) => {
+        setUploadedFiles(prev => [...prev, file]);
     };
 
     //Append new chat to prevChats
@@ -96,23 +95,28 @@ function ChatWindow() {
 
             <div className="chatInput">
                 {showFileUpload && (
-                    <div className="file-upload-modal">
-                        <FileUpload onUploadComplete={handleUploadComplete} />
-                        <button 
-                            className="close-upload"
-                            onClick={() => setShowFileUpload(false)}
-                        >
-                            Cancel
-                        </button>
-                    </div>
+                     <div className="inline-file-upload">
+                        <FileUpload onFileUploaded={handleUploadComplete} />
+                     </div>
                 )}
-
+                
+                {/* Previous uploaded files preview not needed here as FileUpload handles it, 
+                    but we need to track them for the message context. 
+                    Actually, ChatWindow needs to know about files to send them.
+                    The FileUpload component shows its own "Attached Files" list.
+                    ChatWindow just collects them.
+                */}
+                
                 {uploadedFiles.length > 0 && (
+                     /* We hide this duplication if FileUpload shows it, BUT FileUpload clears its state on unmount?
+                        No, FileUpload maintains local state. 
+                        However, if we close showFileUpload, we lose the visual. 
+                        Let's keep a small badge list for the ChatWindow context so user knows what will be sent. 
+                      */
                     <div className="uploaded-files-preview">
                         {uploadedFiles.map((file, idx) => (
                             <div key={idx} className="file-badge">
-                                <i className="fa-solid fa-paperclip"></i>
-                                {file.originalName}
+                                <span>{file.originalName}</span>
                                 <button onClick={() => setUploadedFiles(prev => prev.filter((_, i) => i !== idx))}>
                                     <i className="fa-solid fa-xmark"></i>
                                 </button>
@@ -123,7 +127,7 @@ function ChatWindow() {
 
                 <div className="inputBox">
                     <button
-                        className="attach-button"
+                        className={`attach-button ${showFileUpload ? 'active' : ''}`}
                         onClick={() => setShowFileUpload(!showFileUpload)}
                         disabled={loading}
                         title="Attach files"

@@ -18,6 +18,10 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = 8080;
 
+// CRITICAL: Trust Render's reverse proxy (Cloudflare)
+// This MUST come before any rate limiters
+app.set('trust proxy', 1);
+
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
