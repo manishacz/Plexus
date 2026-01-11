@@ -6,6 +6,7 @@ import Joi from 'joi';
 import { optionalAuthenticate } from '../middleware/auth.js';
 import Upload from '../models/Upload.js';
 import { processFile, encodeImageToBase64 } from '../utils/fileProcessor.js';
+import { uploadToVercel, deleteFromVercel } from '../utils/vercelBlob.js';
 
 const router = express.Router();
 
@@ -87,6 +88,114 @@ const checkFileOwnership = async (req, res, next) => {
         return res.status(500).json({ error: 'Server error', message: 'Failed to verify file ownership' });
     }
 };
+
+/**
+ * POST /api/upload/single
+ * Upload single file to Vercel Blob
+ */
+router.post('/single',
+    optionalAuthenticate,
+    uploadRateLimiter,
+    (req, res, next) => {
+        upload.single('file')(req, res, (err) => {
+            if (err) {
+                console.error('Multer error:', err);
+                return res.status(400).json({
+                    error: 'Upload failed',
+                    message: err.message
+                });
+            }
+            next();
+        });
+    },
+    async (req, res) => {
+        try {
+            const file = req.file;
+            const { error, value } = uploadSchema.validate(req.body);
+
+            if (error) {
+                return res.status(400).json({
+                    error: 'Validation error',
+                    message: error.details[0].message
+                });
+            }
+
+            const { threadId } = value;
+            const userId = req.user?.id || 'anonymous';
+
+            if (!file) {
+                return res.status(400).json({
+                    error: 'No file uploaded',
+                    message: 'Please select a file'
+                });
+            }
+
+            console.log('Processing file:', file.originalname);
+
+            // 1. Process file locally to extract text
+            let processedData = {};
+            try {
+                processedData = await processFile(file);
+                console.log(`File processed: ${file.originalname}, Type: ${processedData.type}`);
+                console.log(`Extracted text length: ${processedData.text?.length || 0} characters`);
+            } catch (procError) {
+                console.error(`File processing error:`, procError);
+                processedData = { error: procError.message, text: '', type: 'unknown' };
+            }
+
+            // 2. Upload to Vercel Blob
+            // Note: Using existing memoryStorage, so file.buffer is available.
+            const blobUpload = await uploadToVercel(
+                file.buffer,
+                file.originalname,
+                userId,
+                file.mimetype
+            );
+
+            // 4. Save metadata to database
+            const uploadRecord = new Upload({
+                userId: userId,
+                threadId: threadId,
+                filename: file.filename || blobUpload.pathname.split('/').pop(),
+                originalName: file.originalname,
+                mimeType: file.mimetype,
+                size: file.size,
+                storageUrl: blobUpload.url,        // Vercel Blob URL
+                blobPathname: blobUpload.pathname, // For deletion
+                metadata: processedData,
+                extractedText: processedData.text || ''
+            });
+
+            await uploadRecord.save();
+
+            console.log('Upload record saved:', uploadRecord._id);
+
+            res.status(201).json({
+                success: true,
+                message: 'File uploaded successfully',
+                file: {
+                    id: uploadRecord._id,
+                    filename: uploadRecord.filename,
+                    originalName: uploadRecord.originalName,
+                    mimeType: uploadRecord.mimeType,
+                    size: uploadRecord.size,
+                    url: blobUpload.url,
+                    downloadUrl: blobUpload.downloadUrl,
+                    uploadedAt: uploadRecord.uploadedAt,
+                    extractedText: uploadRecord.extractedText,
+                    hasText: !!uploadRecord.extractedText && uploadRecord.extractedText.length > 0
+                }
+            });
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            res.status(500).json({
+                error: 'Upload failed',
+                message: error.message
+            });
+        }
+    }
+);
 
 /**
  * POST /api/upload
@@ -304,6 +413,15 @@ router.delete('/:id',
     async (req, res) => {
         try {
             const upload = req.upload;
+
+            // Delete from Vercel Blob
+            if (upload.storageUrl) {
+                // If we recorded a specific blob pathname/url, use it.
+                // The utility expects the full URL.
+                await deleteFromVercel(upload.storageUrl);
+            }
+
+            // Delete from database
             await Upload.findByIdAndDelete(upload._id);
 
             res.json({

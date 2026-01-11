@@ -42,6 +42,10 @@ const UploadSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Mixed,
         default: {}
     },
+    blobPathname: {
+        type: String,
+        required: false
+    },
     extractedText: {
         type: String,
         default: ''
