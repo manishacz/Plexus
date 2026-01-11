@@ -26,22 +26,14 @@ export const AuthProvider = ({ children }) => {
                 window.location.href = '/chat';
             }
         } else {
-            if (document.cookie.includes('token=')) {
-                await checkAuthStatus();
-            } else {
-                setUser(null);
-                setLoading(false);
-            }
+            // Always try to verify session with backend since cookies are HttpOnly
+            await checkAuthStatus();
         }
     })();
     }, []);
 
         const checkAuthStatus = async () => {
-        if (!document.cookie.includes('token=')) {
-            setUser(null);
-            setLoading(false);
-            return false;
-        }
+        // Removed client-side cookie check as tokens are HttpOnly
     
         try {
             const response = await fetch(`${API_URL}/api/auth/user`, {
