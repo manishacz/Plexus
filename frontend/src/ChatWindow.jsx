@@ -20,14 +20,10 @@ function ChatWindow() {
         setLoading(true);
         setNewChat(false);
 
-        let messageContent = prompt;
+        // Backend now handles file context automatic injection based on thread history
+        // matches user request: "No need to send fileIds - backend retrieves all thread files automatically"
+        // But we still send fileIds to track references for the specific message in the DB
         
-        // Add file context if files are uploaded
-        if (uploadedFiles.length > 0) {
-            const fileContext = uploadedFiles.map(f => `[File: ${f.originalName}]`).join(' ');
-            messageContent = `${fileContext}\n\n${prompt}`;
-        }
-
         const options = {
             method: "POST",
             credentials: 'include',
@@ -35,7 +31,7 @@ function ChatWindow() {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                message: messageContent,
+                message: prompt,
                 threadId: currThreadId,
                 fileIds: uploadedFiles.map(f => f.id)
             })
@@ -44,7 +40,11 @@ function ChatWindow() {
         try {
             const response = await fetch(`${API_URL}/api/chat`, options);
             const res = await response.json();
-            setReply(res.reply);
+            
+            // Console log as requested for debugging context
+            console.log(`Message sent. Context length: ${res.contextLength || 'N/A'} chars, Files processed: ${res.filesProcessed || 0}`);
+
+            setReply(res.reply || res.message); // Handle both response formats
             setUploadedFiles([]);
         } catch(err) {
             console.log(err);

@@ -535,5 +535,53 @@ router.get('/thread/:threadId',
 );
 
 
+/**
+ * GET /api/upload/:id/extraction-debug
+ * Diagnostic endpoint to verify text extraction pipeline
+ */
+router.get('/:id/extraction-debug',
+    optionalAuthenticate,
+    validateFileId,
+    checkFileOwnership,
+    async (req, res) => {
+        try {
+            const upload = req.upload;
+
+            // Comprehensive extraction diagnostics
+            const diagnostics = {
+                fileId: upload._id,
+                originalName: upload.originalName,
+                mimeType: upload.mimeType,
+                fileSize: upload.size,
+                storageUrl: upload.storageUrl,
+
+                // Critical: Verify extraction occurred
+                extraction: {
+                    hasExtractedText: !!upload.extractedText,
+                    textLength: upload.extractedText?.length || 0,
+                    textPreview: upload.extractedText?.substring(0, 500) || null,
+                    metadata: upload.metadata,
+                    processingType: upload.metadata?.type || 'unknown'
+                },
+
+                // Validation checks
+                checks: {
+                    textExtracted: !!upload.extractedText && upload.extractedText.length > 0,
+                    metadataPresent: !!upload.metadata && Object.keys(upload.metadata).length > 0,
+                    blobStored: !!upload.storageUrl,
+                    readyForLLM: !!upload.extractedText && upload.extractedText.length > 50
+                }
+            };
+
+            res.json(diagnostics);
+
+        } catch (error) {
+            console.error('Extraction debug error:', error);
+            res.status(500).json({ error: error.message });
+        }
+    }
+);
+
+
 export default router;
 
