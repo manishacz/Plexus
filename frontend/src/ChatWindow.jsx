@@ -13,6 +13,7 @@ function ChatWindow() {
     const [showFileUpload, setShowFileUpload] = useState(false);
     const [uploadedFiles, setUploadedFiles] = useState([]);
     const [listening, setListening] = useState(false);
+    const [hasAssistantFiles, setHasAssistantFiles] = useState(false);
 
     const getReply = async () => {
         if (!prompt.trim()) return;
@@ -20,9 +21,10 @@ function ChatWindow() {
         setLoading(true);
         setNewChat(false);
 
-        // Backend now handles file context automatic injection based on thread history
-        // matches user request: "No need to send fileIds - backend retrieves all thread files automatically"
-        // But we still send fileIds to track references for the specific message in the DB
+        // Use Assistant API if thread has OpenAI-ready files
+        const endpoint = hasAssistantFiles 
+            ? `${API_URL}/api/assistant/chat`
+            : `${API_URL}/api/chat`;
         
         const options = {
             method: "POST",
@@ -33,16 +35,16 @@ function ChatWindow() {
             body: JSON.stringify({
                 message: prompt,
                 threadId: currThreadId,
-                fileIds: uploadedFiles.map(f => f.id)
+                // Only send fileIds for standard chat (backward compatibility)
+                ...(hasAssistantFiles ? {} : { fileIds: uploadedFiles.map(f => f.id) })
             })
         };
 
         try {
-            const response = await fetch(`${API_URL}/api/chat`, options);
+            const response = await fetch(endpoint, options);
             const res = await response.json();
             
-            // Console log as requested for debugging context
-            console.log(`Message sent. Context length: ${res.contextLength || 'N/A'} chars, Files processed: ${res.filesProcessed || 0}`);
+            console.log(`Using ${hasAssistantFiles ? 'Assistant' : 'Standard'} API`);
 
             setReply(res.reply || res.message); // Handle both response formats
             setUploadedFiles([]);
@@ -55,6 +57,10 @@ function ChatWindow() {
 
     const handleUploadComplete = (file) => {
         setUploadedFiles(prev => [...prev, file]);
+        // Enable Assistant mode if file is ready
+        if (file.openai?.ready) {
+            setHasAssistantFiles(true);
+        }
     };
 
     //Append new chat to prevChats

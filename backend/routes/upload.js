@@ -5,8 +5,13 @@ import rateLimit from 'express-rate-limit';
 import Joi from 'joi';
 import { optionalAuthenticate } from '../middleware/auth.js';
 import Upload from '../models/Upload.js';
-import { processFile, encodeImageToBase64 } from '../utils/fileProcessor.js';
+import Thread from '../models/Thread.js';
 import { uploadToVercel, deleteFromVercel } from '../utils/vercelBlob.js';
+import {
+    uploadFileToOpenAI,
+    getOrCreateVectorStore,
+    addFileToVectorStore
+} from '../utils/openaiAssistant.js';
 
 const router = express.Router();
 
@@ -110,7 +115,7 @@ const checkFileOwnership = async (req, res, next) => {
 
 /**
  * POST /api/upload/single
- * Upload single file to Vercel Blob
+ * Upload single file with OpenAI integration
  */
 router.post('/single',
     optionalAuthenticate,
@@ -149,29 +154,61 @@ router.post('/single',
                 });
             }
 
-            console.log('Processing file:', file.originalname);
+            console.log(`[Upload] Processing: ${file.originalname}`);
 
-            // 1. Process file locally to extract text
-            let processedData = {};
-            try {
-                processedData = await processFile(file);
-                console.log(`File processed: ${file.originalname}, Type: ${processedData.type}`);
-                console.log(`Extracted text length: ${processedData.text?.length || 0} characters`);
-            } catch (procError) {
-                console.error(`File processing error:`, procError);
-                processedData = { error: procError.message, text: '', type: 'unknown' };
-            }
-
-            // 2. Upload to Vercel Blob
-            // Note: Using existing memoryStorage, so file.buffer is available.
+            // 1. Upload to Vercel Blob (for archival/download)
             const blobUpload = await uploadToVercel(
                 file.buffer,
                 file.originalname,
                 userId,
                 file.mimetype
             );
+            console.log(`[Upload] Vercel Blob URL: ${blobUpload.url}`);
 
-            // 4. Save metadata to database
+            // 2. Upload to OpenAI Files API
+            let openaiFileId = null;
+            let openaiStatus = 'pending';
+            try {
+                const openaiFile = await uploadFileToOpenAI(blobUpload.url, file.originalname);
+                openaiFileId = openaiFile.id;
+                openaiStatus = 'uploaded';
+                console.log(`[Upload] ✓ OpenAI File ID: ${openaiFileId}`);
+            } catch (openaiError) {
+                console.error(`[Upload] OpenAI upload failed:`, openaiError);
+                // Don't fail the entire upload - file is still in Vercel Blob
+                openaiStatus = 'failed';
+            }
+
+            // 3. Get or create Vector Store for thread
+            let thread = await Thread.findOne({ threadId: threadId });
+            if (!thread) {
+                return res.status(404).json({ error: 'Thread not found' });
+            }
+
+            if (!thread.openaiVectorStoreId && openaiFileId) {
+                try {
+                    const vectorStore = await getOrCreateVectorStore(threadId, thread.title);
+                    thread.openaiVectorStoreId = vectorStore.id;
+                    await thread.save();
+                    console.log(`[Upload] ✓ Vector Store created: ${vectorStore.id}`);
+                } catch (vsError) {
+                    console.error(`[Upload] Vector Store creation failed:`, vsError);
+                }
+            }
+
+            // 4. Add file to Vector Store
+            if (openaiFileId && thread.openaiVectorStoreId) {
+                try {
+                    await addFileToVectorStore(thread.openaiVectorStoreId, openaiFileId);
+                    openaiStatus = 'completed';
+                    console.log(`[Upload] ✓ File added to Vector Store`);
+                } catch (addError) {
+                    console.error(`[Upload] Add to Vector Store failed:`, addError);
+                    openaiStatus = 'failed';
+                }
+            }
+
+            // 5. Save metadata to database
             const uploadRecord = new Upload({
                 userId: userId,
                 threadId: threadId,
@@ -179,15 +216,21 @@ router.post('/single',
                 originalName: file.originalname,
                 mimeType: file.mimetype,
                 size: file.size,
-                storageUrl: blobUpload.url,        // Vercel Blob URL
-                blobPathname: blobUpload.pathname, // For deletion
-                metadata: processedData,
-                extractedText: processedData.text || ''
+                storageUrl: blobUpload.url,
+                blobPathname: blobUpload.pathname,
+                openaiFileId: openaiFileId,
+                openaiStatus: openaiStatus,
+                openaiProcessedAt: openaiStatus === 'completed' ? new Date() : null,
+                metadata: {
+                    vercelBlobUrl: blobUpload.url,
+                    openaiFileId: openaiFileId,
+                    vectorStoreId: thread.openaiVectorStoreId
+                },
+                extractedText: '' // OpenAI handles text extraction
             });
 
             await uploadRecord.save();
-
-            console.log('Upload record saved:', uploadRecord._id);
+            console.log(`[Upload] ✓ Database record saved: ${uploadRecord._id}`);
 
             res.status(201).json({
                 success: true,
@@ -201,8 +244,11 @@ router.post('/single',
                     url: blobUpload.url,
                     downloadUrl: blobUpload.downloadUrl,
                     uploadedAt: uploadRecord.uploadedAt,
-                    extractedText: uploadRecord.extractedText,
-                    hasText: !!uploadRecord.extractedText && uploadRecord.extractedText.length > 0
+                    openai: {
+                        fileId: openaiFileId,
+                        status: openaiStatus,
+                        ready: openaiStatus === 'completed'
+                    }
                 }
             });
 

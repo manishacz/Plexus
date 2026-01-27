@@ -1,4 +1,4 @@
-import mongoose from "mongoose";    
+import mongoose from "mongoose";
 const MessageSchema = new mongoose.Schema({
     role: {
         type: String,
@@ -12,7 +12,7 @@ const MessageSchema = new mongoose.Schema({
     timeStamp: {
         type: Date,
         default: Date.now
-    }, 
+    },
 });
 
 const ThreadSchema = new mongoose.Schema({
@@ -39,7 +39,25 @@ const ThreadSchema = new mongoose.Schema({
     updatedAt: {
         type: Date,
         default: Date.now
+    },
+    // OpenAI-specific fields
+    openaiThreadId: {
+        type: String,
+        required: false,
+        index: true,
+        unique: true,
+        sparse: true // Allow null values
+    },
+    openaiAssistantId: {
+        type: String,
+        required: false
+    },
+    openaiVectorStoreId: {
+        type: String,
+        required: false,
+        index: true
     }
+
 
 });
 

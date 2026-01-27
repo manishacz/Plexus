@@ -214,7 +214,7 @@ const FileUpload = ({ onFileUploaded }) => {
             <div key={index} className="uploaded-file-item">
               <CheckCircle2 size={16} className="success-icon" />
               <span className="uploaded-filename">{file.originalName}</span>
-              {file.hasText && (
+              {file.openai?.ready && (
                 <span className="processed-badge">✓ Processed</span>
               )}
             </div>

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import chatRoutes from "./routes/chat.js";
 import authRoutes from "./routes/auth.js";
 import uploadRoutes from "./routes/upload.js";
+import assistantChatRoutes from "./routes/assistantChat.js";
 import configurePassport from "./config/passport.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -75,6 +76,7 @@ configurePassport();
 app.use("/api/auth", authRoutes);
 app.use("/api", chatRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/assistant", assistantChatRoutes);
 
 const connectDB = async () => {
   try {

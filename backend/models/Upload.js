@@ -50,6 +50,20 @@ const UploadSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    openaiFileId: {
+        type: String,
+        required: false,
+        index: true
+    },
+    openaiStatus: {
+        type: String,
+        enum: ['pending', 'uploaded', 'processing', 'completed', 'failed'],
+        default: 'pending'
+    },
+    openaiProcessedAt: {
+        type: Date,
+        required: false
+    },
     uploadedAt: {
         type: Date,
         default: Date.now
